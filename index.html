@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ybarpc · 037 号机</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23005f5f'/%3E%3Crect x='4' y='6' width='24' height='17' fill='%23d8d2c0'/%3E%3Crect x='6' y='8' width='20' height='12' fill='%23008080'/%3E%3Crect x='12' y='23' width='8' height='3' fill='%23b7b1a0'/%3E%3C/svg%3E">
+<style>
+/* ============================================================================
+   Ybarpc · 037 号机  ——  物理座机 + 56K 猫 · Windows 98 计费终端
+   ----------------------------------------------------------------------------
+   本版重做要点：
+   1. 拨号改由右侧实体座机 + 外置猫完成，挂机 = 断网，链路灯跟着真实状态走
+   2. 网游走 Win98「游戏登录器」（大区/账号/密码），单机与工具直接打开
+   3. 桌面双击启动，单击选中（手机端单击直接打开）
+   4. 三个自研工具（绿屏 MP3 / 黑胶唱片机 / 赛博电视）保持原样：点击跳转 mp3.html / record.html / tv.html
+   5. 计费、下机结账、重启还原、随机非法操作报错、回收站齐全
+   ============================================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: #040403; font-family: "SimSun", "宋体", serif; color: #000;
+}
+
+/* ---------- 机房氛围 ---------- */
+.room-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(ellipse at 52% 100%, rgba(87,227,137,.15) 0%, transparent 62%),
+              radial-gradient(ellipse at 50% 18%, rgba(255,190,120,.05) 0%, transparent 55%),
+              linear-gradient(180deg, #0a0f0d 0%, #050505 100%);
+}
+.window-light {
+  position: absolute; left: -10%; top: 8%; width: 120%; height: 42%;
+  background: repeating-linear-gradient(0deg, transparent 0 22px, rgba(87,227,137,.035) 22px 44px);
+  transform: rotate(-15deg); pointer-events: none;
+}
+.smoke { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 28% 72%, rgba(180,200,190,.05), transparent 60%),
+              radial-gradient(ellipse at 70% 40%, rgba(160,180,170,.04), transparent 55%); }
+
+/* ---------- 整套机位：显示器 + 桌边电话 ---------- */
+.rig { display: flex; align-items: center; gap: clamp(10px, 2vw, 34px); }
+
+.monitor-case {
+  height: min(86vh, 790px); aspect-ratio: 4 / 3.32; position: relative;
+  display: flex; flex-direction: column; padding: 2.6vh 3vh 7.2vh 3vh; border-radius: 3vh;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.035) 0 2px, transparent 2px 6px),
+              linear-gradient(145deg, #e2ded2 0%, #d5d1c3 45%, #b6b2a4 100%);
+  box-shadow: inset -14px -14px 28px rgba(0,0,0,.35), inset 14px 14px 26px rgba(255,255,255,.75),
+              0 30px 60px rgba(0,0,0,.9), 0 0 90px rgba(87,227,137,.10);
+  transform: perspective(1400px) rotateY(-1.2deg) rotateX(.8deg);
+}
+.machine-tag {
+  position: absolute; top: -1.6vh; left: 4vh; background: linear-gradient(#f4f1e6, #dfdacb); color: #1a1a1a;
+  padding: .5vh 2vh; font-size: 1.7vh; border: 1px solid #9a9484; box-shadow: 3px 3px 8px rgba(0,0,0,.55);
+  transform: rotate(-3deg); font-weight: bold; letter-spacing: 1px;
+}
+
+/* 屏幕凹槽 */
+.screen-bezel {
+  position: relative; flex: 1; display: flex; padding: 1.5vh;
+  background: #0b0b09; border-radius: 1.4vh;
+  box-shadow: inset 0 12px 34px rgba(0,0,0,.95), inset 0 -6px 18px rgba(0,0,0,.8),
+              0 0 0 2px #b7b1a0, 0 0 0 3px #8e8877;
+  overflow: hidden;
+}
+
+/* ---------- 屏幕里的 Win98 桌面 ---------- */
+.desktop {
+  position: relative; flex: 1; display: flex; flex-direction: column;
+  background: #008080; border-radius: .5vh; overflow: hidden;
+  box-shadow: inset 0 0 48px rgba(0,0,0,.55); font-family: "SimSun", sans-serif;
+  transition: background .3s ease;
+}
+.bg-bliss { background: linear-gradient(to bottom, #2b70c9 0%, #82b3e4 40%, #b5d7f2 55%, #608d28 56%, #386b17 100%) !important; }
+.bg-tomato { background: linear-gradient(135deg, #6d0000 0%, #c62828 42%, #ff9a2e 100%) !important; }
+.wallpaper { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.wm { position: absolute; right: 4%; top: 24%; font-size: 44px; font-weight: 700; letter-spacing: .18em;
+  color: rgba(255,255,255,.13); font-family: "SimHei"; text-shadow: 1px 1px 2px rgba(0,0,0,.5); }
+.wm2 { position: absolute; right: 4.5%; top: 24%; margin-top: 54px; font-size: 9px; letter-spacing: .34em;
+  color: rgba(255,255,255,.16); }
+
+/* 顶部系统条：网络状态只读，不可点击 */
+.desktop-header {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 3px 8px; background: #c0c0c0; color: #000; border-bottom: 2px solid #808080; font-size: 12px; font-weight: bold;
+}
+.net-status {
+  font-size: 11px; padding: 2px 8px; background: #d4d0c8; color: #000;
+  border: 1px solid #808080; border-right-color: #fff; border-bottom-color: #fff;
+}
+.net-status.online { color: #008000; font-weight: bold; }
+.net-status.dialing { color: #8a4a00; }
+
+/* 计费条 */
+.billing-bar {
+  position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 3px 6px; background: #c0c0c0; border-bottom: 2px solid #808080; font-size: 11px;
+}
+.cell { padding: 2px 6px; background: #d4d0c8; border: 1px solid #808080; border-right-color: #fff; border-bottom-color: #fff; }
+.cell b { font-weight: bold; }
+.cell.bal b { color: #0a6b2f; }
+.cell.bal.low b { color: #b40d0d; }
+
+/* 工具栏 */
+.toolbar {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 4px 6px; background: #c0c0c0; border-bottom: 2px solid #808080;
+}
+.tab {
+  font: inherit; font-size: 11px; padding: 2px 9px; cursor: pointer; background: #c0c0c0; color: #000;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+}
+.tab.active { border-color: #404040 #fff #fff #404040; background: #d4d0c8; font-weight: bold; }
+.search {
+  flex: 1; min-width: 90px; max-width: 210px; font-family: inherit; font-size: 11px; padding: 2px 4px;
+  background: #fff; border: 2px solid #808080; border-right-color: #fff; border-bottom-color: #fff; outline: none; color: #000;
+}
+.count { margin-left: auto; font-size: 10px; color: #333; }
+
+/* ---------- 图标区（全部纯 CSS，无外部图片，不会有白框） ---------- */
+.icon-grid {
+  position: relative; z-index: 1; flex: 1; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px; align-content: start; padding: 10px;
+}
+.icon-grid::-webkit-scrollbar { width: 14px; background: #c0c0c0; border-left: 2px solid #fff; }
+.icon-grid::-webkit-scrollbar-thumb { background: #c0c0c0; border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040; }
+.empty-item { display: none; padding: 10px 14px; font-size: 12px; color: #efefef; text-shadow: 1px 1px 2px #000; }
+
+.desktop-icon {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 4px 2px; border: 1px dotted transparent; cursor: default; color: #fff; text-align: center;
+  background: transparent; font: inherit; user-select: none;
+}
+.desktop-icon.selected { border-color: rgba(255,255,255,.85); background: rgba(0,0,128,.62); }
+.desktop-icon.selected .icon-text { background: #000080; }
+.desktop-icon:focus-visible { outline: 1px dotted #fff; outline-offset: -2px; }
+
+.icon-img { position: relative; width: 40px; height: 40px; flex: none; }
+.tile {
+  position: absolute; inset: 0; border-radius: 4px; overflow: hidden;
+  border: 1px solid rgba(0,0,0,.55);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 2px 2px 0 rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.tile::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 46%;
+  background: linear-gradient(to bottom, rgba(255,255,255,.40), rgba(255,255,255,0));
+  pointer-events: none; z-index: 1;
+}
+.tile::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 32%;
+  background: linear-gradient(to top, rgba(0,0,0,.42), rgba(0,0,0,0));
+  pointer-events: none; z-index: 1;
+}
+.mark {
+  position: relative; z-index: 2; font-family: "SimHei", "黑体", sans-serif;
+  font-weight: 700; line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,.6), 0 0 6px rgba(0,0,0,.35);
+}
+/* Win98 快捷方式小箭头：黑底白三角，两层叠出描边 */
+.icon-img::before {
+  content: ""; position: absolute; left: -6px; bottom: -6px; width: 17px; height: 17px;
+  background: #141414; clip-path: polygon(0 0, 100% 0, 0 100%); z-index: 3;
+}
+.icon-img::after {
+  content: ""; position: absolute; left: -3.5px; bottom: -3.5px; width: 13px; height: 13px;
+  background: #fbfbfb; clip-path: polygon(0 0, 100% 0, 0 100%); z-index: 4;
+}
+
+/* 三个自研物件的图标画法 */
+.art { position: relative; z-index: 2; display: block; }
+.art-mp3 { width: 24px; height: 30px; border-radius: 3px; transform: rotate(-6deg);
+  background: linear-gradient(160deg, #efefef, #8f8f8f);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgba(0,0,0,.5); }
+.art-mp3::before { content: ""; position: absolute; left: 3px; top: 4px; width: 18px; height: 12px;
+  background: linear-gradient(#66ffab, #22b56c);
+  box-shadow: 0 0 7px rgba(87,227,137,.9), inset 0 0 5px rgba(255,255,255,.6); border: 1px solid #0d4a2b; }
+.art-mp3::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 0; height: 0; transform: translateX(-50%);
+  border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 6px solid #3a3a3a; }
+.art-lp { width: 30px; height: 25px; border-radius: 2px;
+  background: linear-gradient(135deg, #8a3c18, #3a1406);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 3px rgba(0,0,0,.5); }
+.art-lp::before { content: ""; position: absolute; right: 4px; top: 2px; width: 21px; height: 21px; border-radius: 50%;
+  background: radial-gradient(circle, #2c2c2c 0 40%, #0b0b0b 41% 100%);
+  box-shadow: inset 0 0 7px rgba(255,255,255,.14), 0 0 0 1px #141414; }
+.art-lp::after { content: ""; position: absolute; right: 12px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: #d4af37; }
+.art-tv { width: 30px; height: 24px; border-radius: 2px; background: linear-gradient(#d5d5d5, #7c7c7c);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgba(0,0,0,.5); }
+.art-tv::before { content: ""; position: absolute; left: 3px; top: 3px; right: 3px; bottom: 6px; background: #06100b;
+  box-shadow: inset 0 0 8px rgba(87,227,137,.85), 0 0 6px rgba(87,227,137,.45); border: 1px solid #24302a; }
+.art-tv::after { content: ""; position: absolute; left: 4px; top: 4px; right: 4px; bottom: 7px;
+  background: repeating-linear-gradient(0deg, rgba(87,227,137,.2) 0 1px, transparent 1px 3px); }
+.tile-art { background: linear-gradient(135deg, #2a2a2a, #101010); }
+
+.icon-text { font-size: 11px; line-height: 1.15; word-break: break-all; text-shadow: 1px 1px 0 #000, 0 0 3px #000; max-width: 74px; }
+
+/* ---------- 任务栏 ---------- */
+.taskbar {
+  position: relative; z-index: 100; flex: none; height: 28px; display: flex; align-items: center; gap: 4px;
+  padding: 0 4px; background: #c0c0c0; border-top: 2px solid #fff; font-size: 11px;
+}
+.start-btn {
+  display: flex; align-items: center; gap: 4px; padding: 2px 8px; cursor: pointer; font-weight: bold;
+  background: #c0c0c0; border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+  font-family: inherit; font-size: 11px; color: #000;
+}
+.start-btn:active, .start-btn.open { border-color: #404040 #fff #fff #404040; }
+.start-flag { width: 13px; height: 13px; display: grid; grid-template-columns: 6px 6px; grid-template-rows: 6px 6px; gap: 1px; flex: none; }
+.start-flag i { display: block; }
+.start-flag i:nth-child(1) { background: #e33a2b; } .start-flag i:nth-child(2) { background: #3aa64a; }
+.start-flag i:nth-child(3) { background: #3a63d8; } .start-flag i:nth-child(4) { background: #e8c33a; }
+.task-btn {
+  font-family: inherit; font-size: 11px; padding: 2px 9px; cursor: pointer; max-width: 110px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  background: #c0c0c0; color: #000; border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+}
+.task-btn:active { border-color: #404040 #fff #fff #404040; }
+.system-tray {
+  margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 2px 8px; background: #c0c0c0;
+  border: 1px solid #808080; border-right-color: #fff; border-bottom-color: #fff; font-size: 11px;
+}
+.tray-btn { font-family: inherit; font-size: 11px; background: none; border: 0; cursor: pointer; color: #000; padding: 0 2px; }
+.tray-btn.muted { color: #8a8a8a; text-decoration: line-through; }
+
+/* 开始菜单 */
+.start-menu {
+  position: absolute; left: 0; bottom: 28px; width: 178px; z-index: 999; display: none; flex-direction: column;
+  background: #c0c0c0; border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+  box-shadow: 3px 3px 10px rgba(0,0,0,.5);
+}
+.start-menu.show { display: flex; }
+.menu-item { padding: 5px 12px; font-size: 12px; cursor: pointer; background: none; border: 0; text-align: left;
+  width: 100%; font-family: inherit; color: #000; }
+.menu-item:hover { background: #000080; color: #fff; }
+.menu-sep { height: 1px; margin: 2px 4px; background: #808080; box-shadow: 0 1px 0 #fff; }
+
+/* ---------- 桌面内的 Win98 窗口（可拖动） ---------- */
+.win-window {
+  position: absolute; z-index: 60; width: 250px; max-width: 82%; display: none;
+  background: #c0c0c0; color: #000; font-size: 12px; font-family: "SimSun", sans-serif;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+  box-shadow: 4px 4px 12px rgba(0,0,0,.55);
+}
+.win-window.show { display: block; z-index: 70; }
+.win-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 6px; background: #000080; color: #fff; font-weight: bold; font-size: 12px;
+  cursor: default; user-select: none;
+}
+.win-x {
+  width: 16px; height: 14px; font-family: "SimSun", serif; font-size: 12px; line-height: 10px;
+  background: #c0c0c0; color: #000; cursor: pointer;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+}
+.win-body { padding: 10px; }
+.drive { display: flex; align-items: center; gap: 8px; padding: 5px 2px; border-bottom: 1px dotted #909090; }
+.drive:last-child { border-bottom: 0; }
+.drive-ico { width: 22px; height: 15px; flex: none; background: linear-gradient(#e7e3d6, #a9a49a); border: 1px solid #5f5f5f; box-shadow: inset 0 -4px 0 #8a857b; }
+.drive-txt b { display: block; font-size: 12px; }
+.drive-txt small { color: #444; font-size: 10px; }
+.bill-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted #909090; }
+.win-actions { display: flex; justify-content: flex-end; gap: 6px; padding: 0 10px 10px; }
+.empty-note { padding: 18px 6px; text-align: center; color: #555; font-size: 12px; }
+
+/* ---------- 弹窗 ---------- */
+.modal-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.win-dialog {
+  width: 80%; max-width: 350px; background: #d4d0c8;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+  box-shadow: 5px 5px 15px rgba(0,0,0,.8); transform: scale(.9); transition: transform .3s cubic-bezier(.175,.885,.32,1.275);
+  font-family: "SimSun", sans-serif; color: #000;
+}
+.modal-overlay.show .win-dialog { transform: scale(1); }
+.dialog-title { background: #000080; color: #fff; padding: 4px 8px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; }
+.dialog-content { padding: 15px; font-size: 13px; }
+.dialog-btn {
+  padding: 4px 15px; font-size: 13px; background: #d4d0c8; cursor: pointer; color: #000; font-family: "SimSun", serif;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040;
+}
+.dialog-btn:active { border-color: #404040 #fff #fff #404040; }
+.dialog-btn:disabled { color: #777; }
+
+.cyber-cafe-alert {
+  position: absolute; right: 10px; bottom: 35px; z-index: 9998; width: 258px; background: #c0c0c0;
+  border: 2px solid #fff; border-right-color: #404040; border-bottom-color: #404040; box-shadow: 3px 3px 10px rgba(0,0,0,.5);
+  transform: translateX(120%); transition: transform .4s cubic-bezier(.175,.885,.32,1.275); font-family: "SimSun", sans-serif;
+}
+.cyber-cafe-alert.show { transform: translateX(0); }
+.alert-title { background: #000080; color: #fff; padding: 4px 8px; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; }
+.alert-body { padding: 12px 8px; display: flex; gap: 8px; }
+.alert-text { font-size: 12px; line-height: 1.45; color: #000; }
+
+/* 拨号连接窗口 */
+.dial-ico { font-size: 32px; }
+.l-tag { font-size: 11px; color: #444; }
+.dial-input {
+  flex: 1; font-family: inherit; font-size: 12px; padding: 3px 4px; background: #fff; color: #000;
+  border: 2px solid #808080; border-right-color: #fff; border-bottom-color: #fff;
+}
+
+/* 游戏登录器 */
+#launcherOverlay .win-dialog { max-width: 322px; }
+.launch-hero {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 10px; padding: 8px;
+  background: linear-gradient(#cbc7bd, #b4b0a6); border: 1px solid #8a8577; box-shadow: inset 0 1px 0 #fff;
+}
+.launch-hero .icon-img { width: 36px; height: 36px; }
+.launch-hero .icon-img::before { width: 14px; height: 14px; left: -5px; bottom: -5px; }
+.launch-hero .icon-img::after { width: 11px; height: 11px; left: -3px; bottom: -3px; }
+.launch-meta b { display: block; font-size: 13px; letter-spacing: .5px; }
+.launch-meta small { display: block; font-size: 10px; color: #4a463c; margin-top: 2px; letter-spacing: .5px; }
+.l-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.l-row > label { width: 54px; flex: none; font-size: 12px; }
+.l-input, .l-select {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 12px; padding: 3px 4px;
+  background: #fff; color: #000; outline: none;
+  border: 2px solid #808080; border-right-color: #fff; border-bottom-color: #fff;
+}
+.l-input:focus, .l-select:focus { background: #ffffe8; }
+.l-check { display: flex; align-items: center; gap: 5px; font-size: 12px; margin: 2px 0 8px; }
+.l-check input { width: 13px; height: 13px; }
+.l-msg { min-height: 16px; font-size: 11px; color: #a01010; line-height: 1.4; margin-bottom: 6px; }
+.l-msg.ok { color: #0a6b2f; }
+.l-tip { font-size: 10px; color: #57534a; line-height: 1.5; margin: 2px 0 10px; padding-top: 6px; border-top: 1px dotted #8a8577; }
+.l-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 壁纸 */
+.wp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wp-item { border: 2px solid transparent; cursor: pointer; text-align: center; padding: 4px; }
+.wp-item:hover { border-color: #000080; background: #e2e2e2; }
+.wp-item.active { border-color: #000080; background: #c0c0c0; }
+.wp-thumb { height: 58px; border: 1px solid #808080; margin-bottom: 5px; box-shadow: inset 0 0 5px rgba(0,0,0,.4); }
+.wp-label { font-size: 11px; }
+
+/* ---------- 桌面外的物理外设：座机 + 56K 猫 ---------- */
+.desk-setup { display: flex; flex-direction: column; gap: 2.6vh; position: relative; z-index: 10;
+  transform: perspective(1200px) rotateY(-8deg) rotateX(4deg); }
+.landline {
+  width: 158px; height: 118px; background: linear-gradient(135deg, #f0ebd8, #d4ceb8);
+  border-radius: 12px; position: relative; cursor: pointer; border: 1px solid #b0a999;
+  box-shadow: 10px 15px 30px rgba(0,0,0,.6), inset 2px 2px 5px #fff, inset -2px -2px 5px rgba(0,0,0,.2);
+  transition: transform .2s;
+}
+.landline:hover { transform: translateY(-3px); }
+.landline-handset {
+  width: 168px; height: 33px; background: linear-gradient(180deg, #e6e0cc, #c4bea8);
+  border-radius: 20px; position: absolute; top: -20px; left: -5px;
+  box-shadow: 3px 5px 10px rgba(0,0,0,.4), inset 0 2px 2px #fff;
+  transition: all .3s cubic-bezier(.175,.885,.32,1.275);
+}
+.landline.picked .landline-handset {
+  transform: translateY(-32px) rotate(-15deg); box-shadow: 15px 20px 20px rgba(0,0,0,.5);
+}
+.phone-pad {
+  width: 70px; height: 80px; background: #d4ceb8; border-radius: 8px; position: absolute; bottom: 10px; right: 10px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px;
+  box-shadow: inset 1px 1px 5px rgba(0,0,0,.3);
+}
+.phone-key { background: #f9f6eb; border-radius: 4px; box-shadow: 1px 1px 2px rgba(0,0,0,.3); }
+.phone-led {
+  position: absolute; left: 12px; bottom: 14px; width: 7px; height: 7px; border-radius: 50%;
+  background: #444; box-shadow: inset 0 1px 2px rgba(0,0,0,.8); transition: .2s;
+}
+.phone-led.on { background: #ffb24a; box-shadow: 0 0 8px #ffb24a; }
+.phone-tip { margin-top: 2.4vh; width: 158px; font-size: 10px; color: #6b6b62; text-align: center; line-height: 1.5; }
+.modem {
+  width: 178px; height: 48px; background: linear-gradient(180deg, #e0dac6, #c4bdab); border-radius: 6px;
+  position: relative; border: 1px solid #aaa494; display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 18px; gap: 12px; box-shadow: 8px 10px 25px rgba(0,0,0,.7), inset 1px 1px 3px #fff;
+}
+.modem-label { position: absolute; left: 14px; top: 8px; font-size: 9px; color: #6f6a5c; letter-spacing: 1px; }
+.modem-antenna {
+  width: 6px; height: 38px; background: #888; position: absolute; right: 22px; top: -28px; border-radius: 3px;
+  box-shadow: inset -1px 0 2px rgba(255,255,255,.5); transform-origin: bottom center; transform: rotate(15deg);
+}
+.modem-leds { display: flex; gap: 8px; align-items: center; }
+.led { width: 8px; height: 8px; border-radius: 50%; background: #444; box-shadow: inset 0 1px 2px rgba(0,0,0,.8); transition: .2s; }
+.led.pwr { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
+.led.link.active { background: #ffcf4a; box-shadow: 0 0 9px #ffcf4a; animation: ledBlink .45s infinite alternate; }
+.led.link.on { background: #57e389; box-shadow: 0 0 11px #57e389; }
+@keyframes ledBlink { 0% { opacity: .3; } 100% { opacity: 1; } }
+
+/* ---------- 开机 / 关机 / CRT 特效 ---------- */
+.boot-screen {
+  position: absolute; inset: 0; background: #000; z-index: 9990; border-radius: .5vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+  transition: opacity .6s ease;
+}
+.boot-logo { font-size: 54px; font-family: "SimHei", "黑体", sans-serif; font-weight: 900; color: #57e389;
+  letter-spacing: 6px; text-shadow: 0 0 20px rgba(87,227,137,.45); animation: bootGlow 3s infinite alternate; }
+@keyframes bootGlow { 0% { text-shadow: 0 0 10px rgba(87,227,137,.2); } 100% { text-shadow: 0 0 30px rgba(87,227,137,.6); } }
+.boot-sub { font-size: 13px; color: #8a8a8a; margin-top: 14px; letter-spacing: 4px; }
+.boot-bios { position: absolute; left: 12px; top: 10px; font: 10px/1.6 monospace; color: #4a4a4a; text-align: left; }
+.boot-tip { position: absolute; bottom: 34px; font-size: 12px; color: #4a4a4a; letter-spacing: 2px; animation: tipBlink 1.5s infinite; }
+@keyframes tipBlink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.shutdown-screen {
+  position: absolute; inset: 0; background: #000; z-index: 99999; display: none;
+  align-items: center; justify-content: center; color: #ffb44a; font: 16px/1.7 monospace; text-align: center; padding: 20px;
+}
+.scanlines {
+  position: absolute; inset: 0; pointer-events: none; z-index: 10;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0, rgba(0,0,0,.16) 1px, transparent 1px, transparent 3px);
+  box-shadow: inset 0 0 110px rgba(0,0,0,.9); animation: flick 6s infinite steps(1);
+}
+@keyframes flick { 0%, 96% { opacity: 1; } 97% { opacity: .93; } 98% { opacity: 1; } }
+.glare {
+  position: absolute; top: 0; left: 0; width: 100%; height: 62%; pointer-events: none; z-index: 11;
+  background: linear-gradient(135deg, rgba(255,255,255,.09) 0%, rgba(255,255,255,.02) 28%, transparent 52%);
+}
+.monitor-controls { position: absolute; bottom: 2.4vh; right: 3vh; display: flex; align-items: center; gap: 1.4vh; }
+.knob { width: 2vh; height: 2vh; background: radial-gradient(circle at 35% 30%, #a9a396, #4b463c); border-radius: 50%; border: 2px solid #2b2a25; }
+.led-power { width: .85vh; height: .85vh; background: #57e389; border-radius: 50%; box-shadow: 0 0 10px #57e389; transition: .3s; }
+/* 屏幕外围的机箱铭牌：写信 / GitHub 直达（纯 CSS，贴在 CRT 外壳下沿） */
+.author-plate {
+  position: absolute; left: 50%; bottom: 1.7vh; transform: translateX(-50%) rotate(-1.2deg);
+  display: flex; align-items: center; gap: 1.1vh; padding: .7vh 1.4vh; max-width: 82%;
+  background: linear-gradient(#f4f0e1, #ddd7c5);
+  border: 1px solid #a29a88; border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.5), inset 0 1px 0 #fff;
+  font-size: 1.35vh; line-height: 1; white-space: nowrap;
+}
+.plate-brand { font-weight: bold; color: #1c1b16; letter-spacing: .5px; }
+.plate-sep { width: 1px; height: 1.5vh; background: #a8a292; }
+.plate-link {
+  color: #243b6b; text-decoration: none; padding: .3vh .2vh;
+  border-bottom: 1px dotted #6b7ba8;
+}
+.plate-link:hover { background: #ffffcc; color: #000; border-bottom-color: #000; }
+.plate-link:focus-visible { outline: 1px dotted #243b6b; outline-offset: 1px; }
+
+.brand-text { position: absolute; bottom: 3vh; left: 3vh; font-size: 1.4vh; color: #6b6455; font-weight: bold; letter-spacing: 2px; }
+.speaker-grille {
+  position: absolute; bottom: 5.4vh; left: 50%; transform: translateX(-50%);
+  width: 16vh; height: 1.6vh; border-radius: 1px;
+  background: repeating-linear-gradient(90deg, rgba(80,74,60,.35) 0 2px, transparent 2px 6px);
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1080px) {
+  .desk-setup { display: none; }              /* 窄屏收起桌面外设，拨号改为允许屏幕内触发 */
+  .monitor-case { height: min(90vh, 800px); }
+}
+@media (max-width: 600px) {
+  .rig { display: block; }
+  .monitor-case {
+    width: 100vw; height: 100vh; max-height: none; aspect-ratio: auto;
+    border-radius: 0; padding: 0; transform: none; background: #0b0b09; box-shadow: none;
+  }
+  .machine-tag, .brand-text, .monitor-controls, .speaker-grille, .author-plate { display: none; }
+  .screen-bezel { border-radius: 0; padding: 0; box-shadow: none; }
+  .desktop { border-radius: 0; }
+  .icon-grid { padding: 6px 6px 10px; gap: 4px; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .icon-img { width: 36px; height: 36px; }
+  .win-dialog { width: 90%; }
+  .win-window { width: 86%; left: 6% !important; right: auto !important; }
+  .cyber-cafe-alert { width: 80%; right: 5%; }
+  .boot-logo { font-size: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="room-bg"><div class="window-light"></div><div class="smoke"></div></div>
+
+<div class="rig">
+<div class="monitor-case">
+  <div class="machine-tag">A 区 - 037 号机</div>
+
+  <div class="screen-bezel">
+    <div class="desktop" id="desktopArea">
+
+      <div class="wallpaper">
+        <div class="wm">Ybarpc</div>
+        <div class="wm2">YBARPC · SINCE 2001</div>
+      </div>
+
+      <!-- 顶部：系统条 + 只读网络状态 -->
+      <div class="desktop-header">
+        <span>极域网盾 v2.5 · Ybarpc</span>
+        <span class="net-status" id="netStatus">断网中</span>
+      </div>
+
+      <!-- 计费条 -->
+      <div class="billing-bar">
+        <span class="cell">卡号 <b>037-0088</b></span>
+        <span class="cell">费率 <b>¥3.00 / 时</b></span>
+        <span class="cell">上机 <b id="billTime">0时00分00秒</b></span>
+        <span class="cell bal" id="billBalCell">余额 <b id="billBal">¥8.00</b></span>
+      </div>
+
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-cat="all">全部</button>
+          <button class="tab" data-cat="online">网游</button>
+          <button class="tab" data-cat="pc">单机</button>
+          <button class="tab" data-cat="tool">工具</button>
+        </div>
+        <input class="search" id="search" type="search" placeholder="搜索游戏 / 工具…" autocomplete="off">
+        <span class="count" id="count"></span>
+      </div>
+
+      <!-- 图标区 -->
+      <div class="icon-grid" id="iconGrid"></div>
+      <p class="empty-item" id="emptyItem">没有找到相关项目</p>
+
+      <!-- 我的电脑 -->
+      <div class="win-window" id="winComputer" style="left:14px; top:78px;">
+        <div class="win-title"><span>我的电脑</span><button class="win-x" data-close="winComputer">×</button></div>
+        <div class="win-body">
+          <div class="drive"><span class="drive-ico"></span><div class="drive-txt"><b>C: 系统盘</b><small>已用 32.1G / 共 40.0G</small></div></div>
+          <div class="drive"><span class="drive-ico"></span><div class="drive-txt"><b>D: 游戏盘</b><small>已用 78.6G / 共 80.0G</small></div></div>
+          <div class="drive"><span class="drive-ico"></span><div class="drive-txt"><b>A: 3.5 软驱</b><small>请插入磁盘</small></div></div>
+        </div>
+      </div>
+
+      <!-- 回收站 -->
+      <div class="win-window" id="winRecycle" style="left:26px; top:120px; width:236px;">
+        <div class="win-title"><span>回收站</span><button class="win-x" data-close="winRecycle">×</button></div>
+        <div class="win-body" id="recycleBody">
+          <div class="drive"><span class="drive-ico"></span><div class="drive-txt"><b>局域网游戏服务的快捷方式</b><small>已删除 · 3 KB</small></div></div>
+          <div class="drive"><span class="drive-ico"></span><div class="drive-txt"><b>传奇客户端补丁说明.txt</b><small>已删除 · 1 KB</small></div></div>
+          <div class="drive" style="border-bottom:0;"><span class="drive-ico"></span><div class="drive-txt"><b>playshow.exe</b><small>已删除 · ？KB</small></div></div>
+        </div>
+        <div class="win-actions">
+          <button class="dialog-btn" id="emptyRecycle">清空回收站</button>
+        </div>
+      </div>
+
+      <!-- 计费查询 -->
+      <div class="win-window" id="winBilling" style="right:14px; top:92px;">
+        <div class="win-title"><span>极域计费 · 上机查询</span><button class="win-x" data-close="winBilling">×</button></div>
+        <div class="win-body">
+          <div class="bill-row"><span>会员卡号</span><b>037-0088</b></div>
+          <div class="bill-row"><span>上机时长</span><b id="winTime">0时00分00秒</b></div>
+          <div class="bill-row"><span>当前余额</span><b id="winBal">¥8.00</b></div>
+          <div class="bill-row"><span>费率</span><b>¥3.00 / 小时</b></div>
+          <div class="bill-row" style="border-bottom:0;"><span>状态</span><b id="winState">未登录</b></div>
+        </div>
+        <div class="win-actions"><button class="dialog-btn" id="logoutBtn">下机结账</button></div>
+      </div>
+
+      <!-- 开始菜单 -->
+      <div class="start-menu" id="startMenu">
+        <button class="menu-item" data-action="dial">拨号网络</button>
+        <button class="menu-item" data-action="billing">计费查询</button>
+        <button class="menu-item" data-action="computer">我的电脑</button>
+        <button class="menu-item" data-action="wallpaper">显示 属性</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" data-action="logout">下机结账</button>
+        <button class="menu-item" data-action="about">关于本机</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" data-action="restart">重新启动计算机</button>
+        <button class="menu-item" data-action="shutdown">关闭系统…</button>
+      </div>
+
+      <!-- 任务栏 -->
+      <div class="taskbar">
+        <button class="start-btn" id="startBtn"><span class="start-flag"><i></i><i></i><i></i><i></i></span>开始</button>
+        <button class="task-btn" data-action="billing">计费</button>
+        <div class="system-tray">
+          <button class="tray-btn" id="soundBtn" title="静音 / 取消静音">音量</button>
+          <span>En</span>
+          <span id="clock">22:47</span>
+        </div>
+      </div>
+
+    </div><!-- /desktop -->
+
+    <div class="scanlines"></div>
+    <div class="glare"></div>
+
+    <!-- 开机引导 -->
+    <div class="boot-screen" id="bootScreen">
+      <div class="boot-bios">YROOM BIOS v2.11<br>Pentium IV 1.7GHz · 256MB OK<br>Detecting IDE drives ... OK</div>
+      <div class="boot-logo">Ybarpc</div>
+      <div class="boot-sub">YBARPC · 037 号机</div>
+      <div class="boot-tip">按任意键进入计费系统…</div>
+    </div>
+
+    <!-- 关机 -->
+    <div class="shutdown-screen" id="shutdownScreen">It is now safe to turn off<br>your computer.</div>
+
+    <!-- 上机登录 -->
+    <div class="modal-overlay" id="loginOverlay">
+      <div class="win-dialog">
+        <div class="dialog-title"><span>极域网盾 - 自助上机</span></div>
+        <div class="dialog-content">
+          <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">💻</span> 请刷身份证或输入会员卡：
+          </div>
+          <input type="text" id="loginInput" value="0000000000" style="width: 100%; padding: 4px; border: 2px solid #808080; border-right-color: #fff; border-bottom-color: #fff; margin-bottom: 15px; font-size: 14px; outline: none;">
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="dialog-btn" id="loginBtn" style="font-weight:bold;">登录上机</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 拨号连接 -->
+    <div class="modal-overlay" id="dialupModal">
+      <div class="win-dialog" style="max-width:320px;">
+        <div class="dialog-title"><span>拨号连接</span><span style="cursor:pointer;" data-close="dialupModal">×</span></div>
+        <div class="dialog-content" style="padding:14px;">
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+            <div class="dial-ico">🌐</div>
+            <div>
+              <div style="font-weight:bold; font-size:14px;">正在连接到 16300</div>
+              <div class="l-tag">用户名 037 · 密码 ********</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <label style="width:52px; flex:none; font-size:12px;">电话号码</label>
+            <input class="dial-input" type="text" value="16300" readonly>
+          </div>
+          <div class="l-tag" id="dialHint">提示：确认听筒已拿起，再点连接。</div>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+            <button class="dialog-btn" data-close="dialupModal">取消</button>
+            <button class="dialog-btn" id="connectConfirmBtn" style="font-weight:bold;">连接</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="modal-overlay" id="errorModal">
+      <div class="win-dialog">
+        <div class="dialog-title"><span id="errName">系统提示</span><span style="cursor:pointer;" data-close="errorModal">×</span></div>
+        <div class="dialog-content" style="display: flex; align-items: center; gap: 10px;">
+          <div style="font-size:24px;">❌</div><div id="errMsg" style="line-height:1.5;"></div>
+        </div>
+        <div style="text-align: center; padding-bottom: 15px;">
+          <button class="dialog-btn" data-close="errorModal">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 程序错误（随机模拟老系统非法操作） -->
+    <div class="modal-overlay" id="faultOverlay">
+      <div class="win-dialog" style="max-width:320px;">
+        <div class="dialog-title"><span>程序错误</span><span style="cursor:pointer;" data-close="faultOverlay">×</span></div>
+        <div class="dialog-content">
+          <p style="margin-bottom:10px; line-height:1.5;">该程序执行了非法操作，即将关闭。</p>
+          <small>模块: <span id="faultMod">kernel32.dll</span></small>
+        </div>
+        <div style="text-align:center; padding-bottom:14px;">
+          <button class="dialog-btn" data-close="faultOverlay">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 普通提示 -->
+    <div class="modal-overlay" id="noticeOverlay">
+      <div class="win-dialog">
+        <div class="dialog-title"><span id="noticeTitle">提示</span><span style="cursor:pointer;" data-close="noticeOverlay">×</span></div>
+        <div class="dialog-content" id="noticeText" style="line-height:1.6;"></div>
+        <div style="text-align: center; padding-bottom: 15px;">
+          <button class="dialog-btn" data-close="noticeOverlay">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 游戏登录器 -->
+    <div class="modal-overlay" id="launcherOverlay">
+      <div class="win-dialog">
+        <div class="dialog-title"><span id="launchTitle">游戏登录器</span><span style="cursor:pointer;" data-close="launcherOverlay">×</span></div>
+        <div class="dialog-content" style="padding:12px 14px;">
+          <div class="launch-hero">
+            <span class="icon-img"><span class="tile" id="launchTile"></span></span>
+            <div class="launch-meta">
+              <b id="launchGameName">热血传奇</b>
+              <small>Ybarpc · 037 号机专用登录器</small>
+            </div>
+          </div>
+          <div class="l-row"><label for="launchServer">大 区</label><select class="l-select" id="launchServer"></select></div>
+          <div class="l-row"><label for="launchAccount">账 号</label><input class="l-input" id="launchAccount" type="text" value="037-0088" autocomplete="off"></div>
+          <div class="l-row"><label for="launchPass">密 码</label><input class="l-input" id="launchPass" type="password" value="" autocomplete="off"></div>
+          <div class="l-check"><input type="checkbox" id="launchRemember" checked><label for="launchRemember">记住账号（本机下次自动填入）</label></div>
+          <div class="l-msg" id="launchMsg"></div>
+          <p class="l-tip">提示：本机装有硬盘还原卡，下机后账号记录会被清除。<br>未满 18 周岁请勿长时间上机，认证系统会记录上机时长。</p>
+          <div class="l-actions">
+            <button class="dialog-btn" data-close="launcherOverlay">取消</button>
+            <button class="dialog-btn" id="launchEnter" style="font-weight:bold;">进入游戏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 壁纸 -->
+    <div class="modal-overlay" id="wallpaperOverlay">
+      <div class="win-dialog">
+        <div class="dialog-title"><span>显示 属性</span><span style="cursor:pointer;" data-close="wallpaperOverlay">×</span></div>
+        <div class="dialog-content">
+          <div style="margin-bottom:10px;">在列表中选择背景图片（还原卡已锁定，仅内置可选）：</div>
+          <div class="wp-grid" id="wpGrid"></div>
+          <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="dialog-btn" data-close="wallpaperOverlay">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 欠费/余额滑出提示 -->
+    <div class="cyber-cafe-alert" id="cafeAlert">
+      <div class="alert-title"><span>极域计费 - 余额提示</span><span style="cursor: pointer;" data-close="cafeAlert">×</span></div>
+      <div class="alert-body"><div style="font-size:22px;">💳</div><div class="alert-text" id="alertText"></div></div>
+      <div style="text-align: right; padding: 0 10px 10px 0;"><button class="dialog-btn" data-close="cafeAlert">知道了</button></div>
+    </div>
+
+  </div><!-- /screen-bezel -->
+
+  <div class="speaker-grille"></div>
+  <div class="brand-text">YBARPC - 17" CRT</div>
+
+  <!-- 屏幕外围铭牌：写邮件给作者 / GitHub 项目直达 -->
+  <div class="author-plate">
+    <span class="plate-brand">contact→</span>
+    <span class="plate-sep"></span>
+    <a class="plate-link" href="mailto:yccc1210@163.com">email</a>
+    <span class="plate-sep"></span>
+    <a class="plate-link" href="https://github.com/ybarpc" target="_blank" rel="noopener noreferrer">🐙</a>
+  </div>
+
+  <div class="monitor-controls"><div class="knob"></div><div class="knob"></div><div class="led-power" id="powerLed"></div></div>
+</div>
+
+<!-- 桌面外的实体座机 + 56K 猫 -->
+<div class="desk-setup">
+  <div>
+    <div class="landline" id="landlinePhone">
+      <div class="landline-handset"></div>
+      <div class="phone-led" id="phoneLed"></div>
+      <div class="phone-pad">
+        <div class="phone-key"></div><div class="phone-key"></div><div class="phone-key"></div>
+        <div class="phone-key"></div><div class="phone-key"></div><div class="phone-key"></div>
+        <div class="phone-key"></div><div class="phone-key"></div><div class="phone-key"></div>
+      </div>
+    </div>
+    <div class="phone-tip">拿起听筒 → 开始菜单「拨号网络」<br>挂断听筒会直接断开网络</div>
+  </div>
+  <div class="modem">
+    <div class="modem-label">56K FAX/MODEM</div>
+    <div class="modem-antenna"></div>
+    <div class="modem-leds">
+      <div class="led pwr"></div>
+      <div class="led link" id="modemLinkLed"></div>
+    </div>
+  </div>
+</div>
+</div><!-- /rig -->
+
+<script>
+(function () {
+  'use strict';
+
+  var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  /* ==========================================================================
+     图标数据：全部由纯 CSS 绘制，不引用任何外部图片
+       id / label / mark / c1 c2 / fg / fs / cat / pc / mobile
+       art    三个自研物件：mp3 / lp / tv（点开是桌面内的可操作窗口）
+       account 有账号体系的网游（走登录器），其余直接打开
+     ========================================================================== */
+  var ICONS = [
+    /* ---- 自研三件套 ---- */
+    { id: 'my-mp3', label: '绿屏 MP3',   art: 'mp3', c1: '#333', c2: '#111', cat: 'tool', pc: 'mp3.html' },
+    { id: 'my-lp',  label: '黑胶唱片机', art: 'lp',  c1: '#333', c2: '#111', cat: 'tool', pc: 'record.html' },
+    { id: 'my-tv',  label: '赛博电视',   art: 'tv',  c1: '#333', c2: '#111', cat: 'tool', pc: 'tv.html' },
+    { id: 'recycle', label: '回收站',    mark: '回',  c1: '#eceff1', c2: '#9aa0a4', fg: '#141414', fs: '16px', cat: 'tool', action: 'recycle' },
+
+    /* ---- 网游 ---- */
+    { id: 'mir',    label: '热血传奇',    mark: '传',  c1: '#a82a18', c2: '#3d0b06', fs: '16px', cat: 'online', pc: 'https://mir2.sdo.com' },
+    { id: 'xyq',    label: '梦幻西游',    mark: '梦',  c1: '#ff8390', c2: '#a8152a', fs: '16px', cat: 'online', pc: 'https://xyq.163.com' },
+    { id: 'xy2',    label: '大话西游2',   mark: '话',  c1: '#e8a33c', c2: '#7a3d08', fs: '16px', cat: 'online', pc: 'https://xy2.163.com' },
+    { id: 'wow',    label: '魔兽世界',    mark: 'WOW', c1: '#f0c050', c2: '#7a4d0a', fg: '#2a1a06', fs: '10px', cat: 'online', pc: 'https://wow.blizzard.cn' },
+    { id: 'dnf',    label: '地下城与勇士', mark: '鬼', c1: '#ffc93c', c2: '#a85c00', fs: '16px', cat: 'online', pc: 'https://dnf.qq.com' },
+    { id: 'cf',     label: '穿越火线',    mark: 'CF',  c1: '#ff5a4a', c2: '#6a0909', fs: '13px', cat: 'online', pc: 'https://cf.qq.com', mobile: 'https://cfm.qq.com/' },
+    { id: 'lol',    label: '英雄联盟',    mark: 'LOL', c1: '#5b9bff', c2: '#0a2a6a', fg: '#ffd77a', fs: '11px', cat: 'online', pc: 'https://lol.qq.com', mobile: 'https://lolm.qq.com/' },
+    { id: 'kart',   label: '跑跑卡丁车',  mark: '跑',  c1: '#ffb24d', c2: '#96420a', fs: '16px', cat: 'online', pc: 'https://popkart.tiancity.com' },
+    { id: 'mxd',    label: '冒险岛',      mark: '岛',  c1: '#6fe08a', c2: '#0f6a30', fs: '16px', cat: 'online', pc: 'https://mxd.sdo.com' },
+    { id: 'bnb',    label: '泡泡堂',      mark: '泡',  c1: '#ff8fc7', c2: '#7a1a4f', fs: '16px', cat: 'online', pc: 'https://bnb.tiancity.com' },
+    { id: 'mu',     label: '奇迹 MU',     mark: 'MU',  c1: '#8fa8ff', c2: '#1a2a6a', fs: '12px', cat: 'online', pc: 'https://mu.zhaouc.com' },
+    { id: 'tl',     label: '天龙八部',    mark: '龙',  c1: '#5fd6c8', c2: '#0c5048', fs: '16px', cat: 'online', pc: 'https://tl.changyou.com' },
+    { id: 'csol',   label: '反恐精英 OL',  mark: 'CSO', c1: '#ff9a4a', c2: '#6a2400', fs: '10px', cat: 'online', pc: 'https://csol.tiancity.com' },
+
+    /* ---- 单机 ---- */
+    { id: 'cs16',   label: 'CS 1.6',      mark: 'CS',  c1: '#7c878d', c2: '#1a2024', fs: '13px', cat: 'pc', pc: 'https://store.steampowered.com/app/10/' },
+    { id: 'war3',   label: '魔兽争霸 3',  mark: 'W3',  c1: '#4a6fd8', c2: '#0a1445', fs: '13px', cat: 'pc', pc: 'https://www.blizzard.com/zh-cn/' },
+    { id: 'sc',     label: '星际争霸',    mark: 'SC',  c1: '#8f9aa4', c2: '#1a222a', fs: '13px', cat: 'pc', pc: 'https://www.blizzard.com/zh-cn/' },
+    { id: 'ra2',    label: '红色警戒 2',  mark: '红',  c1: '#ff6a4a', c2: '#6a0d00', fs: '16px', cat: 'pc', pc: 'https://game.ra2web.com' },
+    { id: 'aoe',    label: '帝国时代 2',  mark: '帝',  c1: '#d8b06a', c2: '#5c3a0c', fs: '16px', cat: 'pc', pc: 'https://www.ageofempires.com/' },
+    { id: 'vc',     label: '罪恶都市',    mark: 'VC',  c1: '#b07aff', c2: '#3f0a6a', fs: '13px', cat: 'pc', pc: 'https://store.steampowered.com/app/12120/' },
+    { id: 'lxhy',   label: '流星蝴蝶剑',  mark: '蝶',  c1: '#6fd8e8', c2: '#07505c', fs: '16px', cat: 'pc', pc: 'https://www.yikm.net/' },
+    { id: 'pvz',    label: '植物大战僵尸', mark: 'PvZ', c1: '#8fd85a', c2: '#25600c', fs: '10px', cat: 'pc', pc: 'https://evilgaoshu.github.io/PvZ/' },
+    { id: 'd2',     label: '暗黑破坏神 2', mark: '暗',  c1: '#c78a6a', c2: '#3d1206', fs: '16px', cat: 'pc', pc: 'https://www.blizzard.com/zh-cn/' },
+
+    /* ---- 工具 ---- */
+    { id: 'qq',     label: '腾讯 QQ',     mark: 'QQ',  c1: '#59c8ff', c2: '#0a3f7a', fs: '13px', cat: 'tool', pc: 'https://im.qq.com/', mobile: 'https://im.qq.com/mobileqq/' },
+    { id: 'hf',     label: '浩方对战平台', mark: 'HF', c1: '#ffcf4a', c2: '#7a4d00', fs: '13px', cat: 'tool', pc: 'https://www.cga.com.cn/' },
+    { id: '4399',   label: '4399 小游戏', mark: '4399', c1: '#9fdc6a', c2: '#25600c', fs: '9px', cat: 'tool', pc: 'https://www.4399.com/' },
+    { id: '7k7k',   label: '7k7k 小游戏', mark: '7K',  c1: '#ffa45a', c2: '#8a3a00', fs: '13px', cat: 'tool', pc: 'https://www.7k7k.com/' },
+    { id: 'xunlei', label: '迅雷 5',      mark: '迅',  c1: '#5aa8ff', c2: '#0a2f70', fs: '16px', cat: 'tool', pc: 'https://www.xunlei.com/' },
+    { id: 'kugou',  label: '酷狗音乐',    mark: '音',  c1: '#5ad8ff', c2: '#0a405c', fs: '16px', cat: 'tool', pc: 'https://www.kugou.com/' }
+  ];
+
+  /* 有账号体系、需要走登录器的游戏 */
+  var ACCOUNT_IDS = ['mir', 'xyq', 'xy2', 'wow', 'dnf', 'cf', 'lol', 'kart', 'mxd', 'bnb', 'mu', 'tl', 'csol', 'qq', 'hf'];
+  ICONS.forEach(function (it) { if (ACCOUNT_IDS.indexOf(it.id) > -1) it.account = true; });
+
+  var SERVER_MAP = {
+    mir:  ['雷霆一区（电信）', '烈焰二区（网通）', '怀旧 1.76 区'],
+    xyq:  ['云南区 · 滇池', '河南区 · 中岳', '北京区 · 长安'],
+    xy2:  ['宝象国（电信）', '东海渔村（网通）'],
+    wow:  ['白银之手（PvE）', '霜狼（PvP）', '燃烧之刃'],
+    dnf:  ['格兰之森 · 跨三A', '天空之城 · 跨五'],
+    cf:   ['南方大区（电信）', '北方大区（网通）', '体验服'],
+    lol:  ['艾欧尼亚（电信一区）', '祖安', '诺克萨斯', '黑色玫瑰'],
+    kart: ['道具一区', '竞速一区', '全民漂移服'],
+    mxd:  ['风之大陆 · 童话村', '玩具城'],
+    bnb:  ['泡泡一区', '泡泡二区'],
+    mu:   ['奇迹一区', '奇迹二区'],
+    tl:   ['飞龙在天', '楼兰古城'],
+    csol: ['反恐精英 OL · 一区', '生化大区'],
+    qq:   ['腾讯 QQ · 主服务器'],
+    hf:   ['浩方 · 魔兽 RPG 房', '浩方 · CS 1.6 房']
+  };
+  var DEFAULT_SERVERS = ['全国一区（推荐）', '电信一区', '网通一区', '双线体验服'];
+
+  var WALLPAPERS = [
+    { id: 'xp',     name: 'XP 大草原', cssClass: 'bg-bliss' },
+    { id: 'tomato', name: '番茄花园',  cssClass: 'bg-tomato' },
+    { id: 'win98',  name: '经典 98',   cssClass: '' }
+  ];
+
+  var state = {
+    online: false, dialing: false, phonePicked: false,
+    loggedIn: false, startAt: 0, credit: 8, rate: 3, elapsedMin: 0, elapsedSec: 0,
+    soundOn: true, cat: 'all', query: '', warned1h: false, warnedLow: false,
+    currentWallpaper: 'xp', faultCooldown: 0
+  };
+
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  var grid = $('#iconGrid');
+  var emptyItem = $('#emptyItem');
+  var wpGrid = $('#wpGrid');
+  var landline = $('#landlinePhone');
+  var modemLed = $('#modemLinkLed');
+  var phoneLed = $('#phoneLed');
+  var netStatus = $('#netStatus');
+
+  /* 窄屏没有实体座机时，允许直接拨号 */
+  function hasPeripheral() { return $$('.desk-setup').length > 0 && $('#landlinePhone').offsetParent !== null; }
+
+  /* ==========================================================================
+     音频
+     ========================================================================== */
+  var audioCtx = null;
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function playBootSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var now = audioCtx.currentTime;
+    var beep = function (freq, start) {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.value = freq;
+      g.gain.setValueAtTime(.05, start); g.gain.setValueAtTime(0, start + .1);
+      o.connect(g); g.connect(audioCtx.destination); o.start(start); o.stop(start + .1);
+    };
+    beep(880, now); beep(1320, now + .12);
+  }
+  function playClickSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'square'; o.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    g.gain.setValueAtTime(.025, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .025);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + .03);
+  }
+  function playShutdownSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var now = audioCtx.currentTime;
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(440, now);
+    o.frequency.exponentialRampToValueAtTime(80, now + .45);
+    g.gain.setValueAtTime(.09, now); g.gain.exponentialRampToValueAtTime(.001, now + .55);
+    o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + .55);
+  }
+  function playLoginSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var now = audioCtx.currentTime;
+    var note = function (freq, start) {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(.05, start + .05);
+      g.gain.exponentialRampToValueAtTime(.001, start + .22);
+      o.connect(g); g.connect(audioCtx.destination); o.start(start); o.stop(start + .22);
+    };
+    note(1046.5, now); note(1318.5, now + .1);
+  }
+  function playErrorSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var now = audioCtx.currentTime;
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 200;
+    g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(.04, now + .02);
+    g.gain.linearRampToValueAtTime(0, now + .2);
+    o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + .2);
+  }
+  function playDialupSound() {
+    if (!state.soundOn) return;
+    initAudio();
+    var now = audioCtx.currentTime;
+    var beep = function (f1, f2, start, dur) {
+      var o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o1.frequency.value = f1; o2.frequency.value = f2;
+      g.gain.setValueAtTime(.035, start); g.gain.setValueAtTime(0, start + dur);
+      o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+      o1.start(start); o1.stop(start + dur); o2.start(start); o2.stop(start + dur);
+    };
+    beep(697, 1209, now, .1);
+    beep(770, 1477, now + .15, .1);
+    beep(941, 1336, now + .6, .1);
+
+    var sTime = now + .9;
+    var buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 3, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    var noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+    var nGain = audioCtx.createGain();
+    nGain.gain.setValueAtTime(0, sTime);
+    nGain.gain.linearRampToValueAtTime(.025, sTime + .1);
+    var filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1200;
+    noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
+    noise.start(sTime); noise.stop(sTime + 3);
+  }
+  function speakText(text) {
+    if (!state.soundOn) return;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      var msg = new SpeechSynthesisUtterance(text);
+      msg.lang = 'zh-CN'; msg.rate = 1.0; msg.pitch = .95;
+      window.speechSynthesis.speak(msg);
+    }
+  }
+
+  /* 拨号令牌：挂断或主动断开后，作废还在途中的拨号定时器，避免“挂机了还能连上” */
+  var dialToken = 0;
+
+  /* ==========================================================================
+     网络状态的唯一入口：所有灯、文案都由它统一刷新
+     ========================================================================== */
+  function setNetUI() {
+    modemLed.classList.remove('active', 'on');
+    if (state.dialing) {
+      netStatus.textContent = '正在拨号...';
+      netStatus.className = 'net-status dialing';
+      modemLed.classList.add('active');
+    } else if (state.online) {
+      netStatus.textContent = '已连接 56K';
+      netStatus.className = 'net-status online';
+      modemLed.classList.add('on');
+    } else {
+      netStatus.textContent = '断网中';
+      netStatus.className = 'net-status';
+    }
+    phoneLed.classList.toggle('on', state.phonePicked);
+    landline.classList.toggle('picked', state.phonePicked);
+  }
+
+  /* 挂机 = 断网 */
+  function hangUp() {
+    if (!state.phonePicked) return;
+    state.phonePicked = false;
+    var wasNet = state.online || state.dialing;
+    dialToken++;                 /* 作废在途拨号 */
+    state.online = false;
+    state.dialing = false;
+    setNetUI();
+    if (wasNet) {
+      playShutdownSound();
+      speakText('电话已挂断，网络连接中断。');
+    }
+  }
+
+  /* 座机交互 */
+  landline.addEventListener('click', function () {
+    if (isMobile) return;
+    playClickSound();
+    if (state.phonePicked) {
+      hangUp();
+      return;
+    }
+    state.phonePicked = true;
+    setNetUI();
+    speakText('听筒已拿起，请打开开始菜单拨号。');
+  });
+
+  /* 拨号流程 */
+  function triggerDialup() {
+    if (state.dialing) return;
+    if (state.online) {          /* 已联网时点拨号 = 主动断开 */
+      dialToken++;
+      state.online = false;
+      setNetUI();
+      speakText('网络已断开。');
+      return;
+    }
+    if (hasPeripheral() && !state.phonePicked) {
+      playErrorSound();
+      $('#errName').textContent = '拨号网络 - 无法拨号';
+      $('#errMsg').innerHTML = '调制解调器没有拨号音。<br><br>请先拿起显示器右侧的座机听筒，再重新拨号。';
+      $('#errorModal').classList.add('show');
+      return;
+    }
+    playClickSound();
+    $('#dialHint').textContent = state.phonePicked
+      ? '听筒已拿起，线路就绪，可以连接。'
+      : '提示：本机没有外置座机，可直接连接。';
+    $('#dialupModal').classList.add('show');
+  }
+
+  $('#connectConfirmBtn').addEventListener('click', function () {
+    $('#dialupModal').classList.remove('show');
+    state.dialing = true;
+    var myToken = ++dialToken;
+    setNetUI();
+    playDialupSound();
+    setTimeout(function () {
+      if (myToken !== dialToken) return;   /* 拨号途中被挂断，连接作废 */
+      state.dialing = false;
+      state.online = true;
+      setNetUI();
+      playLoginSound();
+      speakText('拨号连接成功，网速五十六千比特。');
+    }, 2500);
+  });
+
+  /* ==========================================================================
+     图标渲染 / 筛选
+     ========================================================================== */
+  function tileInner(item) {
+    if (item.art === 'mp3') return '<span class="art art-mp3"></span>';
+    if (item.art === 'lp')  return '<span class="art art-lp"></span>';
+    if (item.art === 'tv')  return '<span class="art art-tv"></span>';
+    return '<b class="mark" style="font-size:' + (item.fs || '12px') + ';color:' + (item.fg || '#fff') + '">' + item.mark + '</b>';
+  }
+  function iconHTML(item) {
+    var tileStyle = 'background:linear-gradient(135deg,' + item.c1 + ',' + item.c2 + ')';
+    var tileClass = 'tile' + (item.art ? ' tile-art' : '');
+    return '<button class="desktop-icon" data-id="' + item.id + '" title="' + item.label + '" type="button">' +
+      '<span class="icon-img"><span class="' + tileClass + '" style="' + tileStyle + '">' + tileInner(item) + '</span></span>' +
+      '<span class="icon-text">' + item.label + '</span>' +
+    '</button>';
+  }
+  function renderIcons() {
+    var q = state.query.trim().toLowerCase();
+    var list = ICONS.filter(function (it) {
+      var catOk = state.cat === 'all' || it.cat === state.cat;
+      var qOk = !q || it.label.toLowerCase().indexOf(q) > -1 || (it.mark || '').toLowerCase().indexOf(q) > -1;
+      return catOk && qOk;
+    });
+    grid.innerHTML = list.map(iconHTML).join('');
+    emptyItem.style.display = list.length ? 'none' : 'block';
+    $('#count').textContent = list.length + ' 项';
+  }
+
+  /* ==========================================================================
+     窗口 / 提示
+     ========================================================================== */
+  function openWindow(id) {
+    $$('.win-window').forEach(function (w) { w.classList.toggle('show', w.id === id); });
+  }
+  function closeWindow(id) { $('#' + id).classList.remove('show'); }
+
+  function notice(title, html) {
+    $('#noticeTitle').textContent = title;
+    $('#noticeText').innerHTML = html;
+    $('#noticeOverlay').classList.add('show');
+  }
+  function errorDialog(title, html) {
+    $('#errName').textContent = title;
+    $('#errMsg').innerHTML = html;
+    $('#errorModal').classList.add('show');
+  }
+
+  /* 窗口拖动（Win98 窗口是能拖的） */
+  $$('.win-window').forEach(function (win) {
+    var bar = win.querySelector('.win-title');
+    bar.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.win-x')) return;
+      var host = win.parentElement.getBoundingClientRect();
+      var rect = win.getBoundingClientRect();
+      var dx = e.clientX - rect.left;
+      var dy = e.clientY - rect.top;
+      win.style.left = (rect.left - host.left) + 'px';
+      win.style.top = (rect.top - host.top) + 'px';
+      win.style.right = 'auto';
+      win.style.zIndex = '90';
+      $$('.win-window').forEach(function (w) { if (w !== win) w.style.zIndex = ''; });
+      function move(ev) {
+        var nl = ev.clientX - dx - host.left;
+        var nt = ev.clientY - dy - host.top;
+        nl = Math.max(0, Math.min(nl, host.width - 60));
+        nt = Math.max(0, Math.min(nt, host.height - 40));
+        win.style.left = nl + 'px';
+        win.style.top = nt + 'px';
+      }
+      function up() {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+      }
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+      e.preventDefault();
+    });
+  });
+
+  /* ==========================================================================
+     启动一个图标：三件套 → 窗口；网游 → 登录器；其余 → 直接打开
+     ========================================================================== */
+  function launchItem(item) {
+    if (!item) return;
+    if (item.action === 'recycle') { playClickSound(); openWindow('winRecycle'); return; }
+    /* 三件套是外部的独立 html 文件：一律跳转，不在本页里做窗口 */
+    if (item.account && !state.online) {
+      playErrorSound();
+      errorDialog(item.label, '无法连接到服务器 (错误代码: -1)<br><br>请先拿起座机听筒，通过「拨号网络」连上网。');
+      return;
+    }
+    if (isMobile) {
+      if (item.mobile) { window.open(item.mobile, '_blank'); return; }
+      if (item.account) { notice('没有移动端版本', '【' + item.label + '】是纯 PC 端经典游戏，没有正版移动端版本。<br><br>请移步电脑端体验！'); return; }
+      window.open(item.pc, '_blank');
+      return;
+    }
+    if (item.account) { openLauncher(item); return; }
+    window.open(item.pc, '_blank');
+  }
+
+  /* ==========================================================================
+     游戏登录器
+     ========================================================================== */
+  var launcherGame = null;
+  var lastAccount = '037-0088';
+
+  function openLauncher(item) {
+    launcherGame = item;
+    $('#launchTitle').textContent = '游戏登录器 - ' + item.label;
+    $('#launchGameName').textContent = item.label;
+    $('#launchTile').innerHTML = tileInner(item);
+    $('#launchTile').style.background = 'linear-gradient(135deg,' + item.c1 + ',' + item.c2 + ')';
+
+    var servers = SERVER_MAP[item.id] || DEFAULT_SERVERS;
+    $('#launchServer').innerHTML = servers.map(function (s) {
+      return '<option value="' + s + '">' + s + '</option>';
+    }).join('');
+
+    $('#launchAccount').value = lastAccount;
+    $('#launchPass').value = '';
+    $('#launchMsg').className = 'l-msg';
+    $('#launchMsg').textContent = '';
+    $('#launchEnter').disabled = false;
+    $('#launchEnter').textContent = '进入游戏';
+    $('#launcherOverlay').classList.add('show');
+    setTimeout(function () { $('#launchPass').focus(); }, 50);
+  }
+
+  function submitLauncher() {
+    var acc = $('#launchAccount').value.trim();
+    var pass = $('#launchPass').value.trim();
+    var msg = $('#launchMsg');
+    if (!acc) { msg.className = 'l-msg'; msg.textContent = '请输入游戏账号。'; return; }
+    if (!pass) { msg.className = 'l-msg'; msg.textContent = '密码不能为空，请重新输入。'; return; }
+
+    var item = launcherGame;
+    var server = $('#launchServer').value;
+    msg.className = 'l-msg ok';
+    msg.textContent = '正在连接认证服务器（' + server + '）…';
+    $('#launchEnter').disabled = true;
+    $('#launchEnter').textContent = '连接中…';
+
+    setTimeout(function () {
+      if ($('#launchRemember').checked) lastAccount = acc;
+      $('#launcherOverlay').classList.remove('show');
+      $('#launchEnter').disabled = false;
+      $('#launchEnter').textContent = '进入游戏';
+      msg.textContent = '';
+      if (item && item.pc) window.open(item.pc, '_blank');
+      notice('登录成功', '欢迎回来，<b>' + acc + '</b>！<br>' + (item ? item.label : '') + ' · ' + server +
+        '<br><br>客户端正在启动…<br><span style="color:#555">（演示环境：实际跳转至游戏官网）</span>');
+    }, 1400);
+  }
+  $('#launchEnter').addEventListener('click', submitLauncher);
+  $('#launchPass').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitLauncher(); });
+  $('#launchAccount').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#launchPass').focus(); });
+
+
+  /* ==========================================================================
+     计费 / 登录 / 下机 / 重启 / 关机
+     ========================================================================== */
+  /* 真实计时：X时XX分XX秒，60 秒才进 1 分钟 */
+  function fmtTime(sec) {
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var p = function (n) { return (n < 10 ? '0' + n : n); };
+    return h + '时' + p(m) + '分' + p(s) + '秒';
+  }
+  function currentBalance() {
+    if (!state.loggedIn) return state.credit;
+    return Math.max(0, state.credit - state.elapsedSec * state.rate / 3600);
+  }
+  function updateBillingUI() {
+    var bal = currentBalance();
+    var t = fmtTime(state.elapsedSec);
+    $('#billTime').textContent = t;
+    $('#billBal').textContent = '¥' + bal.toFixed(2);
+    $('#billBalCell').classList.toggle('low', bal <= 1.5);
+    $('#winTime').textContent = t;
+    $('#winBal').textContent = '¥' + bal.toFixed(2);
+    $('#winState').textContent = state.loggedIn ? '已登录' : '未登录';
+  }
+
+  function tick() {
+    if (state.loggedIn) {
+      state.elapsedSec = Math.floor((Date.now() - state.startAt) / 1000);  /* 真实时间，不再加速 */
+      state.elapsedMin = Math.floor(state.elapsedSec / 60);
+      updateBillingUI();
+      if (!state.warned1h && state.elapsedMin >= 60) {
+        state.warned1h = true;
+        $('#alertText').innerHTML = '上机已超 <strong>1 小时</strong>，余额不足。<br>请到吧台充值。';
+        $('#cafeAlert').classList.add('show');
+        speakText('网管提醒，037 号机，上机已超过 1 小时，余额不足，请到吧台充值。');
+        setTimeout(function () { $('#cafeAlert').classList.remove('show'); }, 6000);
+      }
+      if (!state.warnedLow && currentBalance() <= 1.5) {
+        state.warnedLow = true;
+        $('#alertText').innerHTML = '余额仅剩 <strong>¥' + currentBalance().toFixed(2) + '</strong>，即将停机。';
+        $('#cafeAlert').classList.add('show');
+        playErrorSound();
+      }
+    }
+    randomFault();
+  }
+
+  function randomFault() {
+    if (!state.loggedIn) return;
+    if (Date.now() < state.faultCooldown) return;
+    if (Math.random() > 0.0025) return;
+    if ($('#faultOverlay').classList.contains('show')) return;
+    var mods = ['kernel32.dll', 'explorer.exe', 'ddraw.dll', 'msvcrt.dll', 'gp6.exe'];
+    $('#faultMod').textContent = mods[Math.floor(Math.random() * mods.length)];
+    $('#faultOverlay').classList.add('show');
+    playErrorSound();
+    state.faultCooldown = Date.now() + 90000;
+  }
+
+  $('#loginBtn').addEventListener('click', function () {
+    var card = $('#loginInput').value.trim();
+    if (!card) { playErrorSound(); notice('自助上机', '请输入会员卡号，或到吧台刷卡。'); return; }
+    state.loggedIn = true;
+    state.startAt = Date.now();
+    state.elapsedMin = 0;
+    state.elapsedSec = 0;
+    state.warned1h = false;
+    state.warnedLow = false;
+    $('#loginOverlay').classList.remove('show');
+    updateBillingUI();
+    playLoginSound();
+    speakText('上机成功，037 号机，祝您游戏愉快。');
+  });
+
+  function logout() {
+    if (!state.loggedIn) { notice('下机结账', '当前没有上机记录。'); return; }
+    var bal = currentBalance();
+    var used = state.credit - bal;
+    state.loggedIn = false;
+    state.elapsedMin = 0;
+    state.elapsedSec = 0;
+    state.warned1h = false;
+    state.warnedLow = false;
+    $('#winBilling').classList.remove('show');
+    updateBillingUI();
+    playShutdownSound();
+    notice('下机结账', '上机时长 <b>' + fmtTime(state.elapsedSec) + '</b><br>本次消费 <b>¥' + used.toFixed(2) + '</b>，卡内余额 <b>¥' + bal.toFixed(2) + '</b>。<br><br>请到吧台退还押金，欢迎下次光临。');
+    setTimeout(function () { $('#loginOverlay').classList.add('show'); }, 500);
+  }
+  $('#logoutBtn').addEventListener('click', logout);
+  $('#emptyRecycle').addEventListener('click', function () {
+    playClickSound();
+    $('#recycleBody').innerHTML = '<div class="empty-note">回收站是空的。</div>';
+    $('#emptyRecycle').disabled = true;
+  });
+
+  function doRestart() {
+    if (!window.confirm('确定要重新启动计算机吗？（还原卡将清除本机改动）')) return;
+    playShutdownSound();
+    setTimeout(function () {
+      /* 还原卡：所有运行状态回滚 */
+      lastAccount = '037-0088';
+      state.loggedIn = false;
+      state.elapsedMin = 0;
+      state.elapsedSec = 0;
+      state.warned1h = false;
+      state.warnedLow = false;
+      state.online = false;
+      state.dialing = false;
+      dialToken++;
+      state.phonePicked = false;
+      state.cat = 'all';
+      state.query = '';
+      $('#search').value = '';
+      $$('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.cat === 'all'); });
+      setWallpaper('xp');
+      setNetUI();
+      updateBillingUI();
+      renderIcons();
+      $$('.win-window').forEach(function (w) { w.classList.remove('show'); });
+      $('#shutdownScreen').style.display = 'flex';
+      setTimeout(function () {
+        $('#shutdownScreen').style.display = 'none';
+        $('#bootScreen').style.display = 'flex';
+        $('#bootScreen').style.opacity = '1';
+        booted = false;
+      }, 1200);
+    }, 500);
+  }
+
+  /* ==========================================================================
+     开始菜单 / 任务栏动作
+     ========================================================================== */
+  function handleAction(action) {
+    if (action === 'dial') { $('#startMenu').classList.remove('show'); triggerDialup(); return; }
+    if (action === 'billing') { $('#startMenu').classList.remove('show'); updateBillingUI(); openWindow('winBilling'); return; }
+    if (action === 'computer') { $('#startMenu').classList.remove('show'); openWindow('winComputer'); return; }
+    if (action === 'wallpaper') { $('#startMenu').classList.remove('show'); renderWallpapers(); $('#wallpaperOverlay').classList.add('show'); return; }
+    if (action === 'logout') { $('#startMenu').classList.remove('show'); logout(); return; }
+    if (action === 'about') {
+      $('#startMenu').classList.remove('show');
+      notice('关于本机', 'Ybarpc 终端 2003<br>CPU 奔腾 4 1.7GHz · 内存 256MB<br>显卡 GeForce4 MX440 · 硬盘 120G<br>系统 Windows 98 第二版 · 还原卡已启用<br><br>本机编号 037 · Ybarpc');
+      return;
+    }
+    if (action === 'restart') { $('#startMenu').classList.remove('show'); doRestart(); return; }
+    if (action === 'shutdown') {
+      $('#startMenu').classList.remove('show');
+      if (window.confirm('您确定要关闭计算机吗？')) {
+        playShutdownSound();
+        setTimeout(function () { $('#shutdownScreen').style.display = 'flex'; }, 700);
+      }
+    }
+  }
+
+  /* ==========================================================================
+     壁纸
+     ========================================================================== */
+  function renderWallpapers() {
+    wpGrid.innerHTML = WALLPAPERS.map(function (wp) {
+      var thumb = '';
+      if (wp.id === 'xp') thumb = 'linear-gradient(to bottom, #2b70c9 0%, #82b3e4 40%, #b5d7f2 55%, #608d28 56%, #386b17 100%)';
+      else if (wp.id === 'tomato') thumb = 'linear-gradient(135deg, #6d0000 0%, #c62828 42%, #ff9a2e 100%)';
+      else thumb = '#008080';
+      return '<div class="wp-item' + (state.currentWallpaper === wp.id ? ' active' : '') + '" data-wp="' + wp.id + '">' +
+        '<div class="wp-thumb" style="background:' + thumb + '"></div>' +
+        '<div class="wp-label">' + wp.name + '</div></div>';
+    }).join('');
+  }
+  function setWallpaper(id) {
+    var wp = WALLPAPERS.filter(function (w) { return w.id === id; })[0];
+    if (!wp) return;
+    state.currentWallpaper = id;
+    var area = $('#desktopArea');
+    area.className = 'desktop';
+    area.style.background = '';
+    if (wp.cssClass) area.classList.add(wp.cssClass);
+    else area.style.background = '#008080';
+    renderWallpapers();
+  }
+  wpGrid.addEventListener('click', function (e) {
+    var item = e.target.closest('[data-wp]');
+    if (item) { playClickSound(); setWallpaper(item.dataset.wp); }
+  });
+
+  /* ==========================================================================
+     桌面图标：单击选中，双击启动；手机单击直接启动
+     ========================================================================== */
+  var selectedIcon = null;
+  grid.addEventListener('click', function (e) {
+    var btn = e.target.closest('.desktop-icon');
+    if (!btn) return;
+    playClickSound();
+    if (selectedIcon) selectedIcon.classList.remove('selected');
+    if (selectedIcon === btn) { selectedIcon = null; return; }
+    selectedIcon = btn;
+    btn.classList.add('selected');
+    if (isMobile) {
+      btn.classList.remove('selected');
+      selectedIcon = null;
+      launchItem(ICONS.filter(function (i) { return i.id === btn.dataset.id; })[0]);
+    }
+  });
+  grid.addEventListener('dblclick', function (e) {
+    if (isMobile) return;
+    var btn = e.target.closest('.desktop-icon');
+    if (!btn) return;
+    if (selectedIcon) { selectedIcon.classList.remove('selected'); selectedIcon = null; }
+    launchItem(ICONS.filter(function (i) { return i.id === btn.dataset.id; })[0]);
+  });
+
+  /* 工具栏 / 搜索 / 开始 / 静音 */
+  $('#tabs').addEventListener('click', function (e) {
+    var tab = e.target.closest('.tab');
+    if (!tab) return;
+    state.cat = tab.dataset.cat;
+    $$('.tab').forEach(function (t) { t.classList.toggle('active', t === tab); });
+    renderIcons();
+  });
+  $('#search').addEventListener('input', function (e) {
+    state.query = e.target.value;
+    renderIcons();
+  });
+  $('#startBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = $('#startMenu').classList.toggle('show');
+    this.classList.toggle('open', open);
+  });
+
+  $('#soundBtn').addEventListener('click', function () {
+    state.soundOn = !state.soundOn;
+    this.classList.toggle('muted', !state.soundOn);
+    this.textContent = state.soundOn ? '音量' : '静音';
+    if (!state.soundOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  });
+
+  /* 全局关闭：菜单、弹窗 ×、data-action */
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('#startMenu') && !e.target.closest('#startBtn')) {
+      $('#startMenu').classList.remove('show');
+      $('#startBtn').classList.remove('open');
+    }
+    var closer = e.target.closest('[data-close]');
+    if (closer) { $('#' + closer.dataset.close).classList.remove('show'); }
+    var act = e.target.closest('[data-action]');
+    if (act) handleAction(act.dataset.action);
+  });
+
+  /* ==========================================================================
+     开机引导
+     ========================================================================== */
+  var booted = false;
+  function bootUp() {
+    if (booted) return;
+    booted = true;
+    playBootSound();
+    var bs = $('#bootScreen');
+    bs.style.opacity = '0';
+    setTimeout(function () {
+      bs.style.display = 'none';
+      bs.style.opacity = '1';
+      $('#loginOverlay').classList.add('show');
+      speakText('欢迎光临Ybarpc，请先上机。');
+    }, 600);
+  }
+  $('#bootScreen').addEventListener('click', bootUp);
+  document.addEventListener('keydown', function (e) {
+    if (!booted && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); bootUp(); }
+  });
+
+  /* ==========================================================================
+     时钟 / 初始化
+     ========================================================================== */
+  function updateClock() {
+    var d = new Date();
+    $('#clock').textContent = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+
+  setWallpaper('xp');
+  renderIcons();
+  updateBillingUI();
+  setNetUI();
+  updateClock();
+  setInterval(tick, 1000);
+  setInterval(updateClock, 1000);
+})();
+</script>
+</body>
+</html>
