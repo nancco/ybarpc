@@ -14,4 +14,5 @@
 
 ---
 *Powered by Pure HTML/CSS/JS. No frameworks were harmed in the making of this project.*
-
+## 📄 License
+MIT
