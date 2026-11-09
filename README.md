@@ -1,8 +1,6 @@
-# 🖥️ Ybarpc - 千禧赛博网吧电脑
+# 🖥️ Ybarpc - 千禧网吧模拟电脑（Millennium Internet cafe simulation computer）
 
-> *"00 是年代，Y 是 Y2K，是 Youth（青春），是 Yesterday（昨天），是 You（你），也是打的一个 Yawn（哈欠）。"*
-
-这是一个纯前端手搓的复古终端项目。
+> *"Y=Y2K/Youth（青春）/Yesterday（昨天）/You（你）/ Yawn（哈欠）。"*
 
 ### 📡 主项目
 * 🖥️ **[主终端 Ybarpc](https://nancco.github.io/ybarpc)**
