@@ -1,4 +1,4 @@
-# 🖥️ Ybarpc - 千禧网吧模拟电脑（Millennium Internet cafe simulation computer）
+# 🖥️ Ybarpc - 千禧网吧模拟电脑（Millennium Cybercafe Simulator）
 
 > *"Y=Y2K/Youth（青春）/Yesterday（昨天）/You（你）/ Yawn（哈欠）。"*
 
