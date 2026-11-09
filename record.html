@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>record player</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #1a1a1a; font-family: "Courier New", Courier, monospace; color: #d4d4d4; overflow: hidden;
+        }
+
+        /* 幻觉特效遮罩层 */
+        .hallucination {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, rgba(87,227,137,0.4) 0%, transparent 70%);
+            backdrop-filter: blur(10px) hue-rotate(90deg); 
+            opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 999;
+        }
+        .hallucination.flash { animation: flashEffect 1s ease-out; }
+        @keyframes flashEffect {
+            0% { opacity: 1; backdrop-filter: blur(20px) contrast(200%) invert(100%); }
+            30% { opacity: 1; backdrop-filter: blur(5px) hue-rotate(180deg); }
+            100% { opacity: 0; backdrop-filter: blur(0px); }
+        }
+
+        /* 唱片机外壳（胡桃木质感） */
+        .turntable-base {
+            width: 340px; height: 340px; background: linear-gradient(145deg, #5a3a22, #2b180a);
+            border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.2);
+            position: relative; margin-top: 20px; border: 2px solid #1a0e05;
+        }
+
+        /* 转盘底盘，稍微上移给底部控制区留空间 */
+        .platter {
+            width: 240px; height: 240px; background: #111; border-radius: 50%;
+            position: absolute; top: 20px; left: 25px; box-shadow: inset 0 0 20px #000, 0 5px 15px rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* 唱片本体 */
+        .vinyl-disc {
+            width: 220px; height: 220px; border-radius: 50%;
+            background: repeating-radial-gradient(circle at center, #111 0%, #222 2%, #0a0a0a 4%, #1a1a1a 6%);
+            position: relative; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s;
+            transform: rotate(0deg);
+        }
+        
+        .vinyl-disc::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0%, rgba(109, 255, 176, 0.1) 20%, transparent 40%, transparent 60%, rgba(109, 255, 176, 0.1) 80%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .vinyl-disc.blue { background: repeating-radial-gradient(circle at center, #0b213f 0%, #1a4b8c 2%, #071226 4%, #143d73 6%); }
+        .vinyl-disc.playing { animation: spin 1.8s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* 飞盘动画 */
+        .flying-away { transform: translate(300px, -300px) rotate(720deg) !important; opacity: 0; }
+        .flying-in { transform: translate(-300px, 300px) rotate(-720deg); opacity: 0; }
+
+        /* 中心标签 */
+        .label {
+            width: 70px; height: 70px; background: #e6c86e; border-radius: 50%; border: 4px solid #111;
+            position: absolute; z-index: 2; 
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+            font-size: 10px; color: #333; font-weight: bold; text-align: center; line-height: 1.2;
+            padding: 0 8px; word-break: break-all;
+            align-items: center; justify-content: center;
+        }
+        .label::after { content: ''; width: 10px; height: 10px; background: #111; border-radius: 50%; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+
+        /* ======= 底部实体控制区 ======= */
+        .hardware-controls {
+            position: absolute; bottom: 15px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* 旋钮通用样式 */
+        .knob-container { text-align: center; cursor: pointer; }
+        .knob {
+            width: 36px; height: 36px; background: radial-gradient(circle, #888, #222);
+            border-radius: 50%; border: 2px solid #111; box-shadow: 0 4px 6px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.3);
+            position: relative; margin: 0 auto 5px auto; transition: transform 0.1s;
+        }
+        .knob::after {
+            content: ''; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+            width: 3px; height: 10px; background: #ddd; border-radius: 2px;
+        }
+        .knob-label { font-size: 10px; color: #888; font-weight: bold; }
+
+        /* 大播放键 */
+        .btn-play {
+            width: 50px; height: 50px; background: linear-gradient(180deg, #555, #222);
+            border-radius: 50%; border: 2px solid #111; box-shadow: 0 4px 6px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.2);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            color: #ccc; font-size: 18px; font-weight: bold;
+        }
+        .btn-play:active { transform: translateY(2px); box-shadow: 0 2px 3px rgba(0,0,0,0.8); }
+
+        /* 电源灯与插槽 */
+        .power-section { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .power-led {
+            width: 10px; height: 10px; background: #300; border-radius: 50%;
+            box-shadow: inset 0 2px 3px rgba(0,0,0,0.8); transition: 0.2s;
+        }
+        .power-led.on { background: #57e389; box-shadow: 0 0 10px #57e389; }
+        
+        .eject-btn {
+            font-size: 11px; color: #aaa; cursor: pointer; padding: 4px 8px;
+            border: 1px solid #555; border-radius: 4px; background: #1a1a1a;
+        }
+        .eject-btn:active { background: #000; color: #57e389; }
+        #fileInput { display: none; }
+
+        .status-txt { margin-top: 20px; font-size: 12px; color: #888; min-height: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="hallucination" id="hallucination"></div>
+
+    <div class="turntable-base">
+        <div class="platter">
+            <div class="vinyl-disc" id="disc">
+                <div class="label" id="trackName">NO<br>DISC</div>
+            </div>
+        </div>
+        
+        <!-- 底部实体面板 -->
+        <div class="hardware-controls">
+            <!-- 左侧旋钮：音量调节 -->
+            <div class="knob-container" id="volKnobContainer">
+                <div class="knob" id="volKnob"></div>
+                <div class="knob-label">VOL</div>
+            </div>
+
+            <!-- 中间按键：播放/暂停 -->
+            <div class="btn-play" id="playBtn">▶</div>
+
+            <!-- 中间按键：CD/LP切换 -->
+            <div class="knob-container" id="modeBtnContainer">
+                <div class="btn-play" id="modeBtn" style="width: 40px; height: 40px; font-size: 12px; color: #57e389;">LP</div>
+                <div class="knob-label">MODE</div>
+            </div>
+
+            <!-- 右侧：电源灯 + 换碟 -->
+            <div class="power-section">
+                <div class="power-led" id="powerLed"></div>
+                <div class="eject-btn" id="ejectBtn">弹出</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-txt" id="statusText">等待放入光盘...</div>
+    
+    <input type="file" id="fileInput" accept="audio/*">
+    <audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+    const audio = document.getElementById('audio');
+    const disc = document.getElementById('disc');
+    const playBtn = document.getElementById('playBtn');
+    const modeBtn = document.getElementById('modeBtn');
+    const modeBtnContainer = document.getElementById('modeBtnContainer');
+    const volKnob = document.getElementById('volKnob');
+    const volKnobContainer = document.getElementById('volKnobContainer');
+    const ejectBtn = document.getElementById('ejectBtn');
+    const fileInput = document.getElementById('fileInput');
+    const trackName = document.getElementById('trackName');
+    const hallucination = document.getElementById('hallucination');
+    const statusText = document.getElementById('statusText');
+    const powerLed = document.getElementById('powerLed');
+
+    let isPlaying = false;
+    let isLP = true; 
+    let audioCtx = null;
+    let masterGainNode = null; // 用于控制音量
+    let sourceNode = null;
+    let vinylNoiseNode = null;
+    let lowpassFilter = null;
+    let popInterval = null;
+
+    // 音量控制状态：1.0, 0.7, 0.4, 0
+    let volumeLevels = [1.0, 0.7, 0.4, 0];
+    let volumeNames = ['MAX', 'MID', 'LOW', 'MUTE'];
+    let currentVolIndex = 0;
+    let knobRotation = 0;
+
+    // ============ 实体旋钮交互：音量 ============
+    volKnobContainer.addEventListener('click', () => {
+        currentVolIndex = (currentVolIndex + 1) % volumeLevels.length;
+        knobRotation += 45; // 每次点旋转45度
+        volKnob.style.transform = `rotate(${knobRotation}deg)`;
+        
+        let targetVol = volumeLevels[currentVolIndex];
+        statusText.innerText = `音量: ${volumeNames[currentVolIndex]}`;
+        
+        if (masterGainNode && audioCtx) {
+            masterGainNode.gain.setTargetAtTime(targetVol, audioCtx.currentTime, 0.1);
+        }
+    });
+
+    // ============ 实体按键交互：弹出换碟 ============
+    ejectBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        statusText.innerText = "正在换碟...";
+        audio.pause();
+        isPlaying = false;
+        disc.classList.remove('playing');
+        powerLed.classList.remove('on');
+        updateUI();
+        
+        if (vinylNoiseNode) vinylNoiseNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+        clearInterval(popInterval);
+        
+        setTimeout(() => {
+            disc.classList.add('flying-away');
+            setTimeout(() => { hallucination.classList.add('flash'); }, 300);
+            
+            setTimeout(() => {
+                disc.classList.remove('flying-away');
+                disc.classList.add('flying-in');
+                
+                let shortName = file.name.replace(/\.[^.]+$/, ''); 
+                if (shortName.length > 10) shortName = shortName.substring(0, 8) + '..';
+                trackName.innerHTML = shortName;
+                
+                audio.src = URL.createObjectURL(file);
+                audio.load();
+
+                if (Math.random() > 0.5) disc.classList.add('blue');
+                else disc.classList.remove('blue');
+
+                setTimeout(() => {
+                    disc.classList.remove('flying-in');
+                    statusText.innerText = "已就绪，点击▶播放";
+                }, 50);
+            }, 500);
+
+            setTimeout(() => { hallucination.classList.remove('flash'); }, 1000);
+        }, 300); 
+    });
+
+    // ============ 实体按键：播放/暂停 ============
+    playBtn.addEventListener('click', async () => {
+        if (!audio.src) { statusText.innerText = "没有光盘，请按【弹出】插入"; return; }
+        if (!audioCtx) initAudioEngine();
+
+        if (isPlaying) {
+            audio.pause();
+            isPlaying = false;
+            disc.classList.remove('playing');
+            powerLed.classList.remove('on'); 
+            if (vinylNoiseNode) vinylNoiseNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+            clearInterval(popInterval);
+            playBtn.innerHTML = '▶';
+        } else {
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            audio.play();
+            isPlaying = true;
+            disc.classList.add('playing');
+            powerLed.classList.add('on'); 
+            playBtn.innerHTML = '||';
+            
+            if (isLP) startVinylNoise();
+        }
+        updateUI();
+    });
+
+    function updateUI() {
+        if (!isPlaying) playBtn.innerHTML = '▶';
+    }
+
+    // ============ 实体按键：LP / CD 切换 ============
+    modeBtnContainer.addEventListener('click', () => {
+        isLP = !isLP;
+        modeBtn.innerText = isLP ? 'LP' : 'CD';
+        
+        if (!audioCtx) return;
+        
+        if (isLP) {
+            statusText.innerText = "已切换: 黑胶模拟 (LP)";
+            lowpassFilter.frequency.setTargetAtTime(4000, audioCtx.currentTime, 0.1);
+            if (isPlaying) startVinylNoise();
+        } else {
+            statusText.innerText = "已切换: 数字原声 (CD)";
+            lowpassFilter.frequency.setTargetAtTime(20000, audioCtx.currentTime, 0.1);
+            if (vinylNoiseNode) vinylNoiseNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+            clearInterval(popInterval);
+        }
+    });
+
+    // ============ Web Audio API ============
+    function initAudioEngine() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sourceNode = audioCtx.createMediaElementSource(audio);
+        
+        // 主音量控制节点
+        masterGainNode = audioCtx.createGain();
+        masterGainNode.gain.value = volumeLevels[currentVolIndex];
+
+        lowpassFilter = audioCtx.createBiquadFilter();
+        lowpassFilter.type = 'lowpass';
+        lowpassFilter.frequency.value = 4000; 
+        
+        sourceNode.connect(lowpassFilter);
+        lowpassFilter.connect(masterGainNode);
+        masterGainNode.connect(audioCtx.destination);
+
+        // 黑胶底噪
+        const bufferSize = audioCtx.sampleRate * 2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) { output[i] = (Math.random() * 2 - 1) * 0.02; }
+        
+        const noiseSource = audioCtx.createBufferSource();
+        noiseSource.buffer = buffer;
+        noiseSource.loop = true;
+
+        vinylNoiseNode = audioCtx.createGain();
+        vinylNoiseNode.gain.value = 0;
+        noiseSource.connect(vinylNoiseNode);
+        vinylNoiseNode.connect(masterGainNode); // 底噪也受音量控制
+        noiseSource.start();
+    }
+
+    function startVinylNoise() {
+        vinylNoiseNode.gain.setTargetAtTime(0.04, audioCtx.currentTime, 0.2);
+        clearInterval(popInterval);
+        popInterval = setInterval(() => {
+            if (Math.random() > 0.7) {
+                const osc = audioCtx.createOscillator();
+                const popGain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(2000 + Math.random() * 2000, audioCtx.currentTime);
+                popGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                popGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                osc.connect(popGain);
+                popGain.connect(masterGainNode); // 爆豆声也受音量控制
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            }
+        }, 200);
+    }
+
+    audio.addEventListener('ended', () => {
+        isPlaying = false;
+        disc.classList.remove('playing');
+        powerLed.classList.remove('on');
+        if (vinylNoiseNode) vinylNoiseNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.2);
+        clearInterval(popInterval);
+        updateUI();
+        statusText.innerText = "播放结束";
+    });
+</script>
+</body>
+</html>

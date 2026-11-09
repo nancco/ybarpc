@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TV</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #1a1a1a; font-family: "Courier New", Courier, monospace; color: #d4d4d4; overflow: hidden;
+        }
+
+        /* 外壳放大 */
+        .tv-body {
+            width: 90vw; max-width: 480px;
+            background: linear-gradient(145deg, #4a4a4a, #1a1a1a);
+            border-radius: 24px; box-shadow: 0 30px 60px rgba(0,0,0,0.9), inset 0 2px 5px rgba(255,255,255,0.2);
+            position: relative; margin-top: 20px; border: 4px solid #000;
+            display: flex; flex-direction: column; align-items: center; padding: 25px 0;
+            transition: all 0.3s ease; /* 增加过渡效果 */
+        }
+
+        /* 屏幕区域 */
+        .screen-bezel {
+            width: 80%; aspect-ratio: 4 / 3; 
+            background: #0a0a0a;
+            border-radius: 40px / 30px;
+            box-shadow: inset 0 0 30px #000, 0 8px 20px rgba(0,0,0,0.8);
+            position: relative; overflow: hidden;
+            border: 5px solid #111;
+            cursor: pointer; /* 提示可以点击 */
+            transition: all 0.3s ease;
+        }
+
+        /* 全屏模式下的电视与屏幕 */
+        .tv-body.fullscreen {
+            width: 100vw; height: 100vh; max-width: none;
+            border-radius: 0; border: none; padding: 0; margin: 0; background: #000;
+        }
+        .tv-body.fullscreen .screen-bezel {
+            width: 100vw; height: 100vh; aspect-ratio: auto;
+            border-radius: 0; border: none; box-shadow: none;
+        }
+        .tv-body.fullscreen .crt-overlay {
+            border-radius: 0; box-shadow: inset 0 0 100px rgba(0,0,0,0.8);
+        }
+        /* 全屏时隐藏底部的物理按键区域 */
+        .tv-body.fullscreen .tv-controls,
+        .tv-body.fullscreen .input-area {
+            display: none !important;
+        }
+
+        /* 全屏退出提示（默认隐藏） */
+        .exit-hint {
+            position: absolute; top: 20px; right: 20px;
+            color: rgba(255,255,255,0.3); font-size: 12px;
+            pointer-events: none; z-index: 10; display: none;
+        }
+        .tv-body.fullscreen .exit-hint { display: block; }
+
+        #videoEl {
+            width: 100%; height: 100%; 
+            object-fit: cover; 
+            position: absolute; top: 0; left: 0; z-index: 2;
+            display: none; 
+            background: #000;
+        }
+
+        #staticCanvas {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; z-index: 1;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .crt-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.9);
+            border-radius: 40px / 30px;
+            transition: all 0.3s ease;
+        }
+
+        .tv-controls {
+            width: 90%; display: flex; justify-content: space-between; align-items: center;
+            padding: 25px 0 0 0;
+        }
+
+        .speaker-grille {
+            width: 50px; height: 50px;
+            background: repeating-linear-gradient(90deg, #222 0px, #222 5px, #111 5px, #111 10px);
+            border-radius: 6px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
+        }
+
+        .center-lights {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+        }
+        .power-led {
+            width: 10px; height: 10px; background: #300; border-radius: 50%;
+            box-shadow: inset 0 1px 3px #000; transition: 0.2s;
+        }
+        .power-led.on { background: #ff3333; box-shadow: 0 0 15px #ff3333; }
+        .led-label { font-size: 10px; color: #666; letter-spacing: 1px; }
+
+        .btn-group { display: flex; gap: 12px; }
+        .btn {
+            width: 48px; height: 48px; background: linear-gradient(180deg, #666, #333);
+            border-radius: 50%; border: 2px solid #111; box-shadow: 0 5px 8px rgba(0,0,0,0.8), inset 0 2px 3px rgba(255,255,255,0.3);
+            display: flex; align-items: center; justify-content: center;
+            color: #aaa; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 1px 2px rgba(0,0,0,0.8); color: #fff; }
+
+        .input-area {
+            width: 80%; margin-top: 15px; display: none;
+        }
+        .input-area.show { display: block; }
+        .url-input-wrapper {
+            display: flex; background: #000; border: 2px solid #333; border-radius: 6px; overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .url-input-wrapper input {
+            flex: 1; background: transparent; border: none; color: #57e389; font-family: inherit; font-size: 14px; padding: 10px; outline: none;
+        }
+        .url-input-wrapper button {
+            background: #333; color: #fff; border: none; padding: 0 20px; font-family: inherit; font-size: 14px; cursor: pointer;
+        }
+        .url-input-wrapper button:active { background: #57e389; color: #000; }
+
+        .bw-mode { filter: grayscale(100%) contrast(1.3) brightness(0.9); }
+        .color-mode { filter: contrast(1.1) saturate(1.2) brightness(1.05); }
+
+        .status-txt { margin-top: 20px; font-size: 14px; color: #888; text-align: center; line-height: 1.5; min-height: 20px; }
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="tv-body" id="tvBody">
+        <div class="screen-bezel" id="screenBezel" title="点击切换全屏">
+            <video id="videoEl" crossorigin="anonymous"></video>
+            <canvas id="staticCanvas"></canvas>
+            <div class="crt-overlay"></div>
+            <div class="exit-hint">点击屏幕退出全屏 [ × ]</div>
+        </div>
+
+        <div class="input-area" id="inputArea">
+            <div class="url-input-wrapper">
+                <input type="text" id="urlInput" placeholder="粘贴 MP4 直链并回车..." autocomplete="off">
+                <button id="goUrlBtn">载入</button>
+            </div>
+        </div>
+
+        <div class="tv-controls">
+            <div class="speaker-grille"></div>
+            
+            <div class="center-lights">
+                <div class="power-led" id="powerLed"></div>
+                <div class="led-label">POWER</div>
+            </div>
+
+            <div class="btn-group">
+                <div class="btn" id="linkBtn" title="网络链接" style="font-size: 10px;">链接</div>
+                <div class="btn" id="modeBtn" title="黑白/彩色">彩色</div>
+                <div class="btn" id="playBtn" title="播放/暂停">▶</div>
+                <div class="btn" id="insertBtn" title="插入光驱" style="font-size: 10px;">光驱</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-txt" id="statusText">点击屏幕可全屏观看</div>
+
+    <input type="file" id="fileInput" accept="video/*">
+    
+<script>
+    const tvBody = document.getElementById('tvBody');
+    const screenBezel = document.getElementById('screenBezel');
+    const videoEl = document.getElementById('videoEl');
+    const canvas = document.getElementById('staticCanvas');
+    const ctx = canvas.getContext('2d');
+    const playBtn = document.getElementById('playBtn');
+    const modeBtn = document.getElementById('modeBtn');
+    const insertBtn = document.getElementById('insertBtn');
+    const linkBtn = document.getElementById('linkBtn');
+    const fileInput = document.getElementById('fileInput');
+    const statusText = document.getElementById('statusText');
+    const powerLed = document.getElementById('powerLed');
+    
+    const inputArea = document.getElementById('inputArea');
+    const urlInput = document.getElementById('urlInput');
+    const goUrlBtn = document.getElementById('goUrlBtn');
+
+    let isPlaying = false;
+    let isBW = false;
+    let hasVideo = false;
+    let animationId = null;
+
+    // 动态适应屏幕尺寸
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    // ===== 核心：点击屏幕全屏 =====
+    screenBezel.addEventListener('click', (e) => {
+        // 如果点的是输入框，不触发全屏
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        
+        tvBody.classList.toggle('fullscreen');
+        
+        // 切换全屏后，重新调整雪花屏尺寸
+        setTimeout(resizeCanvas, 350);
+        
+        if (tvBody.classList.contains('fullscreen')) {
+            statusText.innerText = "全屏模式，点击屏幕退出";
+        } else {
+            statusText.innerText = "已退出全屏";
+        }
+    });
+
+    function drawStatic() {
+        if (!hasVideo || (hasVideo && videoEl.paused)) {
+            canvas.style.opacity = '0.8'; 
+            if (canvas.width > 0 && canvas.height > 0) {
+                const imageData = ctx.createImageData(canvas.width, canvas.height);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const v = Math.random() * 255;
+                    data[i] = v; data[i+1] = v; data[i+2] = v; data[i+3] = 255;
+                }
+                ctx.putImageData(imageData, 0, 0);
+            }
+        } else {
+            canvas.style.opacity = '0'; 
+        }
+        animationId = requestAnimationFrame(drawStatic);
+    }
+    drawStatic();
+
+    linkBtn.addEventListener('click', () => {
+        inputArea.classList.toggle('show');
+        if (inputArea.classList.contains('show')) urlInput.focus();
+    });
+
+    function loadVideoUrl(url) {
+        if (!url) return;
+        statusText.innerText = "正在连接网络信号...";
+        inputArea.classList.remove('show'); 
+
+        videoEl.src = url;
+        videoEl.load();
+
+        videoEl.onloadedmetadata = () => {
+            hasVideo = true;
+            videoEl.style.display = 'block';
+            videoEl.play();
+            isPlaying = true;
+            powerLed.classList.add('on');
+            playBtn.innerText = '||';
+            statusText.innerText = "网络信号已连接，正在播放";
+            videoEl.className = 'color-mode';
+            isBW = false;
+            modeBtn.innerText = '彩色';
+        };
+
+        videoEl.onerror = () => {
+            statusText.innerText = "信号中断：链接格式不支持或存在跨域限制。";
+            hasVideo = false;
+            videoEl.style.display = 'none';
+            powerLed.classList.remove('on');
+            playBtn.innerText = '▶';
+            isPlaying = false;
+        };
+    }
+
+    goUrlBtn.addEventListener('click', () => loadVideoUrl(urlInput.value.trim()));
+    urlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadVideoUrl(urlInput.value.trim()); });
+
+    insertBtn.addEventListener('click', () => {
+        inputArea.classList.remove('show');
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        statusText.innerText = "正在读取光驱... 咔咔咔...";
+
+        const localUrl = URL.createObjectURL(file);
+        videoEl.src = localUrl;
+        videoEl.load();
+
+        videoEl.onloadedmetadata = () => {
+            hasVideo = true;
+            videoEl.style.display = 'block';
+            videoEl.play();
+            isPlaying = true;
+            powerLed.classList.add('on');
+            playBtn.innerText = '||';
+            statusText.innerText = "光驱读取成功，正在播放";
+            videoEl.className = 'color-mode';
+            isBW = false;
+            modeBtn.innerText = '彩色';
+        };
+    });
+
+    playBtn.addEventListener('click', () => {
+        if (!hasVideo) { statusText.innerText = "没有信号。请先连接视频源。"; return; }
+        if (isPlaying) {
+            videoEl.pause();
+            isPlaying = false;
+            powerLed.classList.remove('on');
+            playBtn.innerText = '▶';
+            statusText.innerText = "已暂停，雪花屏恢复";
+        } else {
+            videoEl.play();
+            isPlaying = true;
+            powerLed.classList.add('on');
+            playBtn.innerText = '||';
+            statusText.innerText = "正在播放";
+        }
+    });
+
+    modeBtn.addEventListener('click', () => {
+        if (!hasVideo) return;
+        isBW = !isBW;
+        videoEl.className = isBW ? 'bw-mode' : 'color-mode';
+        modeBtn.innerText = isBW ? '黑白' : '彩色';
+        statusText.innerText = isBW ? "已切换至黑白模式" : "已切换至彩色模式";
+    });
+
+    videoEl.addEventListener('ended', () => {
+        isPlaying = false;
+        powerLed.classList.remove('on');
+        playBtn.innerText = '▶';
+        statusText.innerText = "播放结束";
+    });
+</script>
+</body>
+</html>

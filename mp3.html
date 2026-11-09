@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>MP3 player</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.7/jsmediatags.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        
+        html, body { 
+            width: 100%; height: 100%; overflow: hidden; 
+            background: #3a3a3a; font-family: "Courier New", Courier, monospace; color: #d8d8d8; user-select: none;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ========== 电脑端默认样式 ========== */
+        .device { 
+            width: 380px; background: linear-gradient(160deg, #5a5f63, #2b2e31 60%, #1d1f21); 
+            border-radius: 18px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.15); 
+            border: 1px solid #141618; 
+            display: flex; flex-direction: column;
+        }
+        .brand { font-size: 12px; letter-spacing: 5px; color: #8a8f93; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        
+        .lcd-wrapper { position: relative; }
+        .lcd { 
+            background: #0e1512; border: 2px solid #050807; border-radius: 6px; padding: 10px;
+            height: 180px; overflow-y: auto; position: relative;
+            box-shadow: inset 0 0 24px rgba(70,255,140,.08), inset 0 0 3px #000; color: #57e389; text-shadow: 0 0 6px rgba(87,227,137,.45);
+        }
+        .lcd::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 40%); pointer-events: none; border-radius: 4px; }
+        
+        /* 丝滑的弹窗提示 */
+        #volOsd {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(14, 21, 18, 0.95); border: 1px solid #57e389; padding: 6px 12px;
+            font-weight: bold; font-size: 14px; border-radius: 4px; opacity: 0; visibility: hidden;
+            box-shadow: 0 0 10px #57e389; text-align: center; pointer-events: none; z-index: 10;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #volOsd.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+
+        /* 各种视图 */
+        #playerInfo { display: flex; flex-direction: column; justify-content: center; height: 100%; }
+        .info-title { font-size: 18px; font-weight: bold; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; color: #6dffb0; letter-spacing: 1px; }
+        .info-artist { font-size: 14px; text-align: center; color: #57e389; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 1px; margin-bottom: 8px; }
+        .info-time { font-size: 13px; text-align: center; color: #2f8a58; font-variant-numeric: tabular-nums; }
+        
+        #novelContent { display: none; font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; padding-bottom: 20px; }
+        
+        /* 列表视图 */
+        #listView { display: none; font-size: 13px; line-height: 1.6; }
+        .list-item-lcd { display: flex; justify-content: space-between; padding: 2px 4px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s; }
+        .list-item-lcd span { overflow: hidden; text-overflow: ellipsis; }
+        .list-item-lcd.selected { background: #1e4a30; color: #6dffb0; }
+        .list-item-lcd.active-playing { color: #57e389; font-weight: bold; }
+
+        /* 丝滑的设置视图 */
+        #settingsView { display: none; padding: 2px 0; }
+        .setting-row {
+            display: flex; justify-content: space-between;
+            padding: 4px 6px; border-radius: 4px;
+            color: #2f8a58; font-size: 13px; font-family: inherit;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .setting-row.selected { color: #6dffb0; background: rgba(109, 255, 176, 0.1); }
+        .setting-name::before { content: '  '; white-space: pre; }
+        .setting-row.selected .setting-name::before { content: '> '; }
+        
+        /* 选项切换弹跳动效 */
+        @keyframes valPop {
+            0% { opacity: 0.2; transform: translateY(4px) scale(0.9); color: #fff; }
+            50% { opacity: 1; transform: translateY(-1px) scale(1.05); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .val-anim { display: inline-block; animation: valPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        .standby-text { font-size: 13px; text-align: center; color: #2f8a58; line-height: 2; margin-top: 40px; }
+        
+        /* 适配高清屏的频谱 */
+        #spectrum { position: absolute; bottom: 4px; right: 4px; width: 60px; height: 16px; opacity: 0.7; pointer-events: none; }
+        
+        .controls-area { margin-top: 15px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* 按钮物理回弹效果 */
+        .dpad { display: grid; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px 56px; gap: 4px; }
+        .dpad button, .func-keys button {
+            background: linear-gradient(180deg, #4a4f53, #33373a); border: 1px solid #1a1c1e; border-radius: 8px;
+            color: #e6e6e6; font-family: inherit; font-size: 18px; cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.4);
+            display: flex; align-items: center; justify-content: center; touch-action: manipulation;
+            transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.08s;
+        }
+        .dpad button:active, .dpad button.pressed, .func-keys button:active, .func-keys button.pressed { 
+            transform: scale(0.92); 
+            box-shadow: inset 0 3px 6px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.2); 
+        }
+        
+        .btn-up { grid-column: 2; grid-row: 1; }
+        .btn-left { grid-column: 1; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+        .btn-down { grid-column: 2; grid-row: 3; }
+        .btn-center { grid-column: 2; grid-row: 2; color: #57e389 !important; font-size: 20px !important; }
+
+        .func-keys { display: flex; gap: 8px; margin-top: 12px; width: 100%; justify-content: center; }
+        .func-keys button { flex: 1; max-width: 80px; padding: 8px 0; font-size: 12px; font-weight: bold; }
+        .func-keys #delBtn { color: #d9534f; }
+
+        .io-slot { margin-top: 15px; background: #1a1c1e; border: 2px solid #111; border-radius: 6px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; box-shadow: inset 0 3px 6px rgba(0,0,0,0.8); }
+        .io-slot label.upload { flex: 1; text-align: center; font-size: 11px; color: #6dffb0; cursor: pointer; padding: 4px 0; font-weight: bold; }
+        .io-slot label.upload:hover { background: #222; }
+        .io-slot input[type=file] { display: none; }
+        .io-slot input[type=text] { flex: 1.5; background: transparent; border: none; color: #a9afb3; font-size: 11px; font-family: inherit; outline: none; }
+        .io-slot button { background: #33373a; color: #cfd3d6; border: 1px solid #111; border-radius: 3px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+
+        /* ========== 手机端全屏适配 ========== */
+        @media (max-width: 500px) {
+            body { background: #2b2e31; }
+            .device { width: 100vw; height: 100vh; border-radius: 0; border: none; padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom) 20px; box-shadow: none; justify-content: space-between; }
+            .brand { padding-top: 15px; }
+            .lcd-wrapper { flex: 1; display: flex; flex-direction: column; margin-top: 10px; margin-bottom: 10px; }
+            .lcd { height: 100%; flex: 1; font-size: 15px; padding: 15px; }
+            .info-title { font-size: 24px; margin-bottom: 12px; }
+            .info-artist { font-size: 18px; }
+            .info-time { font-size: 16px; }
+            #novelContent { font-size: 15px; line-height: 2; }
+            .setting-row { font-size: 15px; padding: 8px 10px; }
+            .list-item-lcd { padding: 6px; font-size: 15px; }
+            
+            .controls-area { margin-top: 0; margin-bottom: 10px; }
+            .dpad { grid-template-columns: 75px 75px 75px; grid-template-rows: 75px 75px 75px; gap: 8px; }
+            .dpad button { font-size: 24px; border-radius: 12px; }
+            .btn-center { font-size: 28px !important; }
+            
+            .func-keys { margin-top: 20px; gap: 12px; }
+            .func-keys button { max-width: 110px; padding: 15px 0; font-size: 15px; border-radius: 10px; }
+            
+            .io-slot { margin-top: 10px; padding: 10px 12px; margin-bottom: 5px; }
+            .io-slot label.upload { font-size: 14px; }
+            .io-slot input[type=text] { font-size: 13px; }
+            .io-slot button { font-size: 13px; padding: 6px 12px; }
+            
+            #volOsd { font-size: 20px; padding: 12px 24px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="device">
+    <div class="brand"><span>MP3</span><span>PLAYER</span></div>
+
+    <div class="lcd-wrapper">
+        <div class="lcd" id="lcdScreen">
+            <div id="playerInfo"><div class="standby-text" id="standbyText">NO TRACK<br>请接入数据</div></div>
+            <div id="novelContent"></div>
+            <div id="settingsView"></div>
+            <div id="listView"></div>
+        </div>
+        <div id="volOsd">VOL 80%</div>
+        <canvas id="spectrum"></canvas>
+    </div>
+
+    <div class="controls-area">
+        <div class="dpad">
+            <button class="btn-up" id="btnUp">&#9650;</button>
+            <button class="btn-left" id="btnLeft">&#9664;</button>
+            <button class="btn-center" id="btnCenter">&#9654;</button>
+            <button class="btn-right" id="btnRight">&#9654;</button>
+            <button class="btn-down" id="btnDown">&#9660;</button>
+        </div>
+        
+        <div class="func-keys">
+            <button id="modeBtn">MODE</button>
+            <button id="setBtn">SET</button>
+            <button id="delBtn">DEL</button>
+        </div>
+    </div>
+
+    <div class="io-slot">
+        <label class="upload">[ 接入SD卡 ]<input type="file" id="fileInput" accept="audio/mpeg,audio/*,.txt,.lrc" multiple></label>
+        <input type="text" id="urlInput" placeholder="输入直链...">
+        <button id="addUrlBtn">下载</button>
+    </div>
+</div>
+
+<audio id="audio" preload="metadata" crossorigin="anonymous"></audio>
+
+<script>
+    const audio = document.getElementById('audio');
+    const btnUp = document.getElementById('btnUp');
+    const btnDown = document.getElementById('btnDown');
+    const btnLeft = document.getElementById('btnLeft');
+    const btnRight = document.getElementById('btnRight');
+    const btnCenter = document.getElementById('btnCenter');
+    const modeBtn = document.getElementById('modeBtn');
+    const setBtn = document.getElementById('setBtn');
+    const delBtn = document.getElementById('delBtn');
+    
+    const fileInput = document.getElementById('fileInput');
+    const urlInput = document.getElementById('urlInput');
+    const addUrlBtn = document.getElementById('addUrlBtn');
+    
+    const lcdScreen = document.getElementById('lcdScreen');
+    const playerInfo = document.getElementById('playerInfo');
+    const novelContent = document.getElementById('novelContent');
+    const settingsView = document.getElementById('settingsView');
+    const listView = document.getElementById('listView');
+    const standbyText = document.getElementById('standbyText');
+    const volOsd = document.getElementById('volOsd');
+    
+    const spectrumCanvas = document.getElementById('spectrum');
+    const spectrumCtx = spectrumCanvas.getContext('2d');
+
+    let playlist = []; 
+    let currentAudioIndex = -1; 
+    let currentNovelIndex = -1;
+    let currentView = 'music'; 
+    
+    // 设置菜单配置
+    let settingIndex = 0; 
+    const settingNames = ['播放模式', '音质特效', 'EQ 音效', 'A-B 复读'];
+    const playModeNames = ['顺序', '循环', '单曲', '随机'];
+    let playModeIndex = 0;
+
+    const qualities = [
+        { id: 'original', name: '原声纯净' }, { id: 'high', name: '高 近CD' },
+        { id: 'mid', name: '中 128k味' }, { id: 'low', name: '低 64k味' }, { id: 'vlow', name: '极低 磁带机' }
+    ];
+    let currentQualityIndex = 2;
+
+    const eqNames = ['正常', '重低音', '流行'];
+    let currentEQIndex = 0;
+
+    let aPoint = null, bPoint = null, volumeLevel = 0.8, scrollTimer = null;
+    let listCursor = 0;
+
+    // 初始化 Canvas 尺寸适配高清屏
+    function initCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = spectrumCanvas.getBoundingClientRect();
+        spectrumCanvas.width = rect.width * dpr;
+        spectrumCanvas.height = rect.height * dpr;
+        spectrumCtx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', initCanvas);
+    function checkCanvasSize() {
+        if (spectrumCanvas.width === 0 || spectrumCanvas.width === 300) { initCanvas(); }
+    }
+
+    // ================= 渲染与动效逻辑 =================
+
+    function initSettingsDOM() {
+        let html = '';
+        for (let i = 0; i < settingNames.length; i++) {
+            html += `
+                <div class="setting-row" id="setting-row-${i}">
+                    <span class="setting-name">${settingNames[i]}</span>
+                    <span class="setting-value" id="setting-val-${i}">--</span>
+                </div>
+            `;
+        }
+        settingsView.innerHTML = html;
+    }
+    initSettingsDOM();
+
+    function updateSettingsUI(animateIndex = -1) {
+        for (let i = 0; i < settingNames.length; i++) {
+            const row = document.getElementById(`setting-row-${i}`);
+            const valEl = document.getElementById(`setting-val-${i}`);
+            
+            if (i === settingIndex) row.classList.add('selected');
+            else row.classList.remove('selected');
+            
+            let valText = '';
+            if (i === 0) valText = playModeNames[playModeIndex];
+            else if (i === 1) valText = qualities[currentQualityIndex].name;
+            else if (i === 2) valText = eqNames[currentEQIndex];
+            else if (i === 3) valText = aPoint === null ? '未设置' : (bPoint === null ? 'A点: ' + aPoint.toFixed(1) + 's' : '循环中...');
+            
+            if (valEl.textContent !== valText) {
+                valEl.textContent = valText;
+                if (i === animateIndex) {
+                    valEl.classList.remove('val-anim');
+                    void valEl.offsetWidth; // 强制浏览器重排
+                    valEl.classList.add('val-anim');
+                }
+            }
+        }
+    }
+
+    let osdTimeout = null;
+    function showOsd(text, duration = 1500, isConfirm = false) {
+        volOsd.innerHTML = text;
+        volOsd.classList.add('show');
+        clearTimeout(osdTimeout);
+        if (!isConfirm) osdTimeout = setTimeout(() => { volOsd.classList.remove('show'); }, duration);
+    }
+
+    let confirmAction = null;
+    function askConfirm(msg, action) { showOsd(msg, 0, true); confirmAction = action; }
+    function closeConfirm() { volOsd.classList.remove('show'); confirmAction = null; }
+    function changeVolume(delta) {
+        volumeLevel = Math.max(0, Math.min(1, volumeLevel + delta));
+        if (masterGain) masterGain.gain.value = volumeLevel;
+        showOsd('VOL ' + Math.round(volumeLevel * 100) + '%', 1000);
+    }
+
+    function updateView() {
+        playerInfo.style.display = currentView === 'music' ? 'flex' : 'none';
+        novelContent.style.display = currentView === 'novel' ? 'block' : 'none';
+        settingsView.style.display = currentView === 'settings' ? 'block' : 'none';
+        listView.style.display = currentView === 'list' ? 'block' : 'none';
+        
+        if (currentView === 'music') setTimeout(checkCanvasSize, 10);
+        if (currentView === 'list') renderLcdList();
+        if (currentView === 'settings') updateSettingsUI();
+        
+        btnCenter.innerHTML = audio.paused ? '&#9654;' : '&#10074;&#10074;';
+        if (currentView === 'novel' && scrollTimer) btnCenter.innerHTML = '&#10074;&#10074;';
+    }
+
+    // ================= 列表渲染与文件解析 =================
+    function parseFileName(fileName) {
+        let name = fileName.replace(/\.[^.]+$/, '').trim();
+        name = name.replace(/\[.*?\]/g, '').trim();
+        name = name.replace(/_[a-zA-Z0-9]+$/g, '').trim();
+        name = name.replace(/^\d+[\s\-_.]*/, '').trim();
+        
+        let artist = '未知歌手', title = name;
+        const matchDash = name.match(/^(.+?)\s*[\-–—]\s*(.+)$/);
+        const matchUnder = name.match(/^(.+?)\s*_\s*(.+)$/);
+        const matchDot = name.match(/^(.+?)\s*\.\s*(.+)$/);
+
+        if (matchDash) { artist = matchDash[1].trim(); title = matchDash[2].trim(); }
+        else if (matchUnder) { artist = matchUnder[1].trim(); title = matchUnder[2].trim(); }
+        else if (matchDot) { artist = matchDot[1].trim(); title = matchDot[2].trim(); }
+        
+        if(artist.length > 20 || title.length === 0) { artist = '未知歌手'; title = name; }
+        if (title === '') title = fileName.replace(/\.[^.]+$/, '');
+        
+        return { artist, title };
+    }
+
+    function renderLcdList() {
+        if (playlist.length === 0) { listView.innerHTML = `<div class="standby-text">列表为空<br>请接入SD卡</div>`; return; }
+        let html = '';
+        playlist.forEach((item, i) => {
+            let displayName = item.type === 'novel' ? ((item.isLrc ? '[词] ' : '[TXT] ') + item.name) : 
+                (item.info.artist !== '未知歌手' ? `${item.info.artist} - ${item.info.title}` : item.info.title);
+            let isPlaying = (i === currentAudioIndex || i === currentNovelIndex) ? 'active-playing' : '';
+            let isSelected = (i === listCursor) ? 'selected' : '';
+            html += `<div class="list-item-lcd ${isSelected} ${isPlaying}" onclick="window.selectListItem(${i})"><span>${i+1}. ${displayName}</span></div>`;
+        });
+        listView.innerHTML = html;
+        const selectedEl = listView.querySelector('.selected');
+        if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
+    }
+
+    window.selectListItem = (i) => { listCursor = i; btnCenter.dispatchEvent(new Event('pointerdown')); };
+
+    // ================= 按键交互与长按逻辑 =================
+    function addPressFeedback(btn) {
+        btn.addEventListener('pointerdown', () => btn.classList.add('pressed'));
+        const removePressed = () => btn.classList.remove('pressed');
+        btn.addEventListener('pointerup', removePressed);
+        btn.addEventListener('pointerleave', removePressed);
+        btn.addEventListener('pointercancel', removePressed);
+    }
+    [btnUp, btnDown, btnLeft, btnRight, btnCenter, modeBtn, setBtn, delBtn].forEach(addPressFeedback);
+
+    function setupLongPress(btn, onShortPress, onLongPressStart) {
+        let timer = null, isLongPress = false, interval = null;
+        btn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isLongPress = false;
+            timer = setTimeout(() => {
+                isLongPress = true;
+                onLongPressStart();
+                interval = setInterval(onLongPressStart, 100);
+            }, 500);
+        });
+        const endPress = (e) => {
+            if (e) e.preventDefault();
+            clearTimeout(timer); clearInterval(interval);
+            if (!isLongPress) onShortPress();
+        };
+        btn.addEventListener('pointerup', endPress);
+        btn.addEventListener('pointercancel', endPress);
+        btn.addEventListener('pointerleave', endPress);
+    }
+
+    setupLongPress(btnLeft, 
+        () => {
+            if (confirmAction) { closeConfirm(); return; }
+            if (currentView === 'settings') return;
+            if (currentView === 'list') { listCursor = (listCursor - 1 + playlist.length) % playlist.length; renderLcdList(); }
+            else if (currentView === 'novel') { lcdScreen.scrollTop -= lcdScreen.clientHeight - 20; }
+            else { const nextIdx = findNextAudio(-1); if (nextIdx !== -1) { loadTrack(nextIdx); ensureAudio().then(()=>audio.play().catch(()=>{})); } }
+        },
+        () => { if (currentView === 'music' && currentAudioIndex !== -1) audio.currentTime = Math.max(0, audio.currentTime - 1); }
+    );
+
+    setupLongPress(btnRight, 
+        () => {
+            if (confirmAction) { closeConfirm(); return; }
+            if (currentView === 'settings') return;
+            if (currentView === 'list') { listCursor = (listCursor + 1) % playlist.length; renderLcdList(); }
+            else if (currentView === 'novel') { lcdScreen.scrollTop += lcdScreen.clientHeight - 20; }
+            else { const nextIdx = findNextAudio(1); if (nextIdx !== -1) { loadTrack(nextIdx); ensureAudio().then(()=>audio.play().catch(()=>{})); } }
+        },
+        () => { if (currentView === 'music' && currentAudioIndex !== -1) audio.currentTime = Math.min(audio.duration, audio.currentTime + 1); }
+    );
+
+    function bindSimplePress(btn, handler) {
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); handler(); });
+    }
+
+    bindSimplePress(btnUp, () => {
+        if (confirmAction) { closeConfirm(); return; }
+        if (currentView === 'settings') { settingIndex = (settingIndex - 1 + settingNames.length) % settingNames.length; updateSettingsUI(); }
+        else if (currentView === 'list') { listCursor = (listCursor - 1 + playlist.length) % playlist.length; renderLcdList(); }
+        else if (currentView === 'novel') { lcdScreen.scrollTop -= lcdScreen.clientHeight - 20; }
+        else changeVolume(0.1);
+    });
+
+    bindSimplePress(btnDown, () => {
+        if (confirmAction) { closeConfirm(); return; }
+        if (currentView === 'settings') { settingIndex = (settingIndex + 1) % settingNames.length; updateSettingsUI(); }
+        else if (currentView === 'list') { listCursor = (listCursor + 1) % playlist.length; renderLcdList(); }
+        else if (currentView === 'novel') { lcdScreen.scrollTop += lcdScreen.clientHeight - 20; }
+        else changeVolume(-0.1);
+    });
+
+    bindSimplePress(btnCenter, async () => {
+        if (confirmAction) { confirmAction(); return; }
+
+        if (currentView === 'settings') {
+            if (settingIndex === 0) playModeIndex = (playModeIndex + 1) % playModeNames.length;
+            else if (settingIndex === 1) { currentQualityIndex = (currentQualityIndex + 1) % qualities.length; applyQuality(qualities[currentQualityIndex].id); }
+            else if (settingIndex === 2) { currentEQIndex = (currentEQIndex + 1) % eqNames.length; applyEQ(currentEQIndex); }
+            else if (settingIndex === 3) {
+                if (aPoint === null) { if (audio.paused) { showOsd('请先播放音乐'); return; } aPoint = audio.currentTime; }
+                else if (bPoint === null) { bPoint = audio.currentTime; if (bPoint < aPoint) { const temp = aPoint; aPoint = bPoint; bPoint = temp; } }
+                else { aPoint = null; bPoint = null; }
+            }
+            updateSettingsUI(settingIndex); 
+            return;
+        }
+
+        if (currentView === 'novel') {
+            if (scrollTimer) { stopScroll(); } 
+            else {
+                btnCenter.innerHTML = '&#10074;&#10074;'; 
+                scrollTimer = setInterval(() => {
+                    if (lcdScreen.scrollTop + lcdScreen.clientHeight >= lcdScreen.scrollHeight - 1) stopScroll();
+                    else lcdScreen.scrollTop += 1;
+                }, 50);
+            }
+            return;
+        }
+        
+        // 【核心修复】：列表播放逻辑，先切视图，再加载音频
+        if (currentView === 'list') {
+            if (playlist.length === 0) return;
+            const item = playlist[listCursor];
+            if (item.type === 'audio') { 
+                currentView = 'music'; 
+                loadTrack(listCursor); 
+                updateView(); // 强制立即渲染UI，绝不等音频
+                ensureAudio().then(() => audio.play().catch(() => {})); // 音频在后台偷偷初始化
+            } 
+            else { 
+                currentNovelIndex = listCursor; 
+                currentView = 'novel'; 
+                renderNovel(); 
+                lcdScreen.scrollTop = 0; 
+                updateView(); 
+            }
+            return;
+        }
+        
+        if (currentAudioIndex === -1) return;
+        await ensureAudio();
+        if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+    });
+
+    bindSimplePress(setBtn, () => {
+        if (confirmAction) { closeConfirm(); return; }
+        if (currentView === 'settings') currentView = 'music';
+        else { currentView = 'settings'; settingIndex = 0; updateSettingsUI(); }
+        updateView();
+    });
+
+    bindSimplePress(modeBtn, () => {
+        if (confirmAction) { closeConfirm(); return; }
+        if (currentView === 'settings') currentView = 'music';
+        else if (currentView === 'music') { currentView = 'novel'; renderNovel(); }
+        else if (currentView === 'novel') { currentView = 'list'; listCursor = currentAudioIndex !== -1 ? currentAudioIndex : 0; }
+        else if (currentView === 'list') currentView = 'music';
+        stopScroll(); updateView();
+    });
+
+    bindSimplePress(delBtn, () => {
+        if (currentView !== 'list') { showOsd('只能在列表中删除', 1500); return; }
+        if (playlist.length === 0 || listCursor < 0 || listCursor >= playlist.length) return;
+        const itemName = playlist[listCursor].type === 'novel' ? playlist[listCursor].name : playlist[listCursor].info.title;
+        askConfirm(`删除: ${itemName.substring(0, 6)}...<br>按中间键确认`, () => { deleteItem(listCursor); closeConfirm(); });
+    });
+
+    // ================= 业务功能 =================
+    function deleteItem(i) {
+        const item = playlist[i];
+        if (item.type === 'audio' && !item.isUrl) URL.revokeObjectURL(item.url);
+        playlist.splice(i, 1);
+        if (i < currentAudioIndex) currentAudioIndex--;
+        else if (i === currentAudioIndex) { audio.pause(); currentAudioIndex = -1; audio.removeAttribute('src'); }
+        if (i < currentNovelIndex) currentNovelIndex--;
+        else if (i === currentNovelIndex) { currentNovelIndex = -1; if (currentView === 'novel') renderNovel(); }
+        if (listCursor >= playlist.length) listCursor = Math.max(0, playlist.length - 1);
+        renderLcdList(); showOsd('已删除', 1000);
+    }
+
+    function stopScroll() {
+        if (scrollTimer) { clearInterval(scrollTimer); scrollTimer = null; }
+        btnCenter.innerHTML = audio.paused ? '&#9654;' : '&#10074;&#10074;';
+    }
+
+    fileInput.addEventListener('change', (e) => {
+        const files = [...e.target.files];
+        if (!files.length) return;
+        let newAudioAdded = false;
+        files.forEach(file => {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext === 'txt' || ext === 'lrc' || file.type === 'text/plain') {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    let content = ev.target.result;
+                    let isLrc = (ext === 'lrc');
+                    if (isLrc) content = content.replace(/\[\d{1,2}:\d{2}[.:]\d{2,3}\]/g, '').trim();
+                    playlist.push({ type: 'novel', isLrc: isLrc, name: file.name, content: content });
+                    if (currentNovelIndex === -1) currentNovelIndex = playlist.length - 1;
+                    if (currentView === 'list') renderLcdList();
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else if (ext === 'mp3' || file.type.startsWith('audio/')) {
+                newAudioAdded = true;
+                const baseName = file.name.replace(/\.[^.]+$/, '');
+                const parsed = parseFileName(file.name);
+                const track = { type: 'audio', name: baseName, url: URL.createObjectURL(file), isUrl: false, info: { title: parsed.title, artist: parsed.artist } };
+                playlist.push(track);
+                const index = playlist.length - 1;
+                if (typeof jsmediatags !== 'undefined') {
+                    jsmediatags.read(file, {
+                        onSuccess: function(tag) {
+                            const tags = tag.tags;
+                            if (tags.title) track.info.title = tags.title.replace(/\[.*?\]/g, '').trim();
+                            if (tags.artist) track.info.artist = tags.artist.replace(/\[.*?\]/g, '').trim();
+                            if (currentAudioIndex === index && currentView === 'music') renderScreenInfo(track.info);
+                            if (currentView === 'list') renderLcdList();
+                        }
+                    });
+                }
+            }
+        });
+        if (newAudioAdded && currentAudioIndex === -1) {
+            const firstAudio = playlist.findIndex(item => item.type === 'audio');
+            if (firstAudio !== -1) loadTrack(firstAudio);
+        }
+        fileInput.value = '';
+    });
+
+    // 【核心修复】：loadTrack 中无条件更新屏幕信息
+    function renderScreenInfo(info) {
+        standbyText.style.display = 'none';
+        const oldTitle = playerInfo.querySelector('.info-title');
+        const oldArtist = playerInfo.querySelector('.info-artist');
+        const oldTime = playerInfo.querySelector('.info-time');
+        if (oldTitle) oldTitle.remove(); if (oldArtist) oldArtist.remove(); if (oldTime) oldTime.remove();
+        const titleEl = document.createElement('div'); titleEl.className = 'info-title'; titleEl.title = info.title; titleEl.textContent = info.title;
+        const artistEl = document.createElement('div'); artistEl.className = 'info-artist'; artistEl.title = info.artist; artistEl.textContent = info.artist;
+        const timeEl = document.createElement('div'); timeEl.className = 'info-time'; timeEl.id = 'screenTime'; timeEl.textContent = '00:00 / 00:00';
+        playerInfo.appendChild(titleEl); playerInfo.appendChild(artistEl); playerInfo.appendChild(timeEl);
+    }
+
+    function renderNovel() {
+        if (currentNovelIndex === -1 || !playlist[currentNovelIndex] || playlist[currentNovelIndex].type !== 'novel') {
+            novelContent.innerHTML = `<div class="standby-text">未载入文本<br>请导入 .txt 或 .lrc 文件</div>`; return;
+        }
+        novelContent.textContent = playlist[currentNovelIndex].content;
+    }
+
+    function findNextAudio(dir) {
+        if (playlist.length === 0) return -1;
+        let idx = currentAudioIndex;
+        for (let i = 0; i < playlist.length; i++) {
+            idx = (idx + dir + playlist.length) % playlist.length;
+            if (playlist[idx].type === 'audio') return idx;
+        }
+        return currentAudioIndex;
+    }
+
+    function loadTrack(index) {
+        if (!playlist[index] || playlist[index].type !== 'audio') return;
+        currentAudioIndex = index;
+        audio.src = playlist[index].url;
+        renderScreenInfo(playlist[index].info); // 无论当前在什么视图，先把 DOM 准备好
+        aPoint = null; bPoint = null;
+    }
+
+    addUrlBtn.onclick = () => {
+        let url = urlInput.value.trim();
+        if (!url || !/^https?:\/\//i.test(url)) return alert('请输入有效链接');
+        let name = '网络音频';
+        try { let fileName = new URL(url).pathname.split('/').pop(); if (fileName) name = decodeURIComponent(fileName).replace(/\.[^.]+$/, ''); } catch (e) {}
+        const parsed = parseFileName(name);
+        playlist.push({ type: 'audio', name, url, isUrl: true, info: { title: parsed.title, artist: parsed.artist || '网络流媒体' } });
+        if (currentAudioIndex === -1) loadTrack(playlist.length - 1);
+        if (currentView === 'list') renderLcdList();
+        urlInput.value = '';
+    };
+    urlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addUrlBtn.click(); });
+
+    // ================= 音频底层处理 =================
+    let audioCtx = null, source = null, lowpass = null, crusher = null, eqFilter = null, masterGain = null, analyser = null, ctxReady = false, crusherMode = null;
+    let scriptBits = 8, scriptReduction = 3, scriptPhase = 0, scriptHold = [0, 0];
+
+    async function initAudio() {
+        if (ctxReady) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaElementSource(audio);
+        lowpass = audioCtx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 20000; lowpass.Q.value = 0.7;
+        eqFilter = audioCtx.createBiquadFilter(); eqFilter.type = 'peaking'; eqFilter.frequency.value = 1000; eqFilter.gain.value = 0; eqFilter.Q.value = 1;
+        masterGain = audioCtx.createGain(); masterGain.gain.value = volumeLevel;
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 32;
+
+        const workletCode = `
+            class CrushProcessor extends AudioWorkletProcessor {
+                static get parameterDescriptors() { return [{ name: 'bits', defaultValue: 8 }, { name: 'reduction', defaultValue: 3 }]; }
+                constructor() { super(); this.phase = 0; this.hold = [0, 0]; }
+                process(inputs, outputs, parameters) {
+                    const input = inputs[0], output = outputs[0];
+                    if (!input || !input.length) return true;
+                    const bits = parameters.bits[0], red = Math.max(1, Math.floor(parameters.reduction[0]));
+                    const levels = Math.pow(2, bits - 1), len = output[0].length;
+                    for (let i = 0; i < len; i++) {
+                        const doHold = this.phase === 0;
+                        for (let ch = 0; ch < output.length; ch++) {
+                            const inCh = input[ch] || input[0];
+                            let s = inCh[i];
+                            if (doHold) {
+                                s = Math.round(s * levels) / levels;
+                                if (s > 1) s = 1; else if (s < -1) s = -1;
+                                this.hold[ch] = s;
+                            }
+                            output[ch][i] = this.hold[ch];
+                        }
+                        this.phase = (this.phase + 1) % red;
+                    }
+                    return true;
+                }
+            }
+            registerProcessor('crush-processor', CrushProcessor);
+        `;
+
+        try {
+            const blob = new Blob([workletCode], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            await audioCtx.audioWorklet.addModule(url);
+            crusher = new AudioWorkletNode(audioCtx, 'crush-processor'); crusherMode = 'worklet';
+        } catch (err) {
+            crusher = audioCtx.createScriptProcessor(4096, 2, 2); crusherMode = 'script';
+            crusher.onaudioprocess = (ev) => {
+                const inp = ev.inputBuffer, out = ev.outputBuffer, nch = out.numberOfChannels, len = out.getChannelData(0).length;
+                const levels = Math.pow(2, scriptBits - 1), red = Math.max(1, Math.floor(scriptReduction));
+                for (let i = 0; i < len; i++) {
+                    const doHold = scriptPhase === 0;
+                    for (let ch = 0; ch < nch; ch++) {
+                        const inCh = inp.numberOfChannels > ch ? inp.getChannelData(ch) : inp.getChannelData(0);
+                        const outCh = out.getChannelData(ch);
+                        let s = inCh[i];
+                        if (doHold) {
+                            s = Math.round(s * levels) / levels;
+                            if (s > 1) s = 1; else if (s < -1) s = -1;
+                            scriptHold[ch] = s;
+                        }
+                        outCh[i] = scriptHold[ch];
+                    }
+                    scriptPhase = (scriptPhase + 1) % red;
+                }
+            };
+        }
+        source.connect(lowpass); lowpass.connect(crusher); crusher.connect(eqFilter);
+        eqFilter.connect(masterGain); masterGain.connect(analyser); analyser.connect(audioCtx.destination);
+        ctxReady = true; applyQuality(qualities[currentQualityIndex].id); applyEQ(currentEQIndex); 
+        
+        initCanvas(); 
+        requestAnimationFrame(drawSpectrum); 
+    }
+
+    async function ensureAudio() { if (!ctxReady) await initAudio(); if (audioCtx.state === 'suspended') await audioCtx.resume(); }
+    
+    function applyQuality(name) {
+        if (!ctxReady) return;
+        const presets = { 
+            original: { freq: 20000, bits: 16, reduction: 1 }, 
+            high: { freq: 9000, bits: 10, reduction: 2 }, 
+            mid: { freq: 6000, bits: 8, reduction: 3 }, 
+            low: { freq: 4000, bits: 7, reduction: 4 }, 
+            vlow: { freq: 2800, bits: 6, reduction: 6 } 
+        };
+        const p = presets[name] || presets.mid;
+        const now = audioCtx.currentTime;
+        lowpass.frequency.setTargetAtTime(p.freq, now, 0.15);
+        if (crusherMode === 'worklet') { 
+            crusher.parameters.get('bits').setTargetAtTime(p.bits, now, 0.15); 
+            crusher.parameters.get('reduction').setTargetAtTime(p.reduction, now, 0.15); 
+        } else { 
+            scriptBits = p.bits; scriptReduction = p.reduction; 
+        }
+    }
+
+    function applyEQ(index) {
+        if (!ctxReady) return;
+        const now = audioCtx.currentTime;
+        if (index === 0) { eqFilter.type = 'peaking'; eqFilter.frequency.setTargetAtTime(1000, now, 0.2); eqFilter.gain.setTargetAtTime(0, now, 0.2); } 
+        else if (index === 1) { eqFilter.type = 'lowshelf'; eqFilter.frequency.setTargetAtTime(200, now, 0.2); eqFilter.gain.setTargetAtTime(10, now, 0.2); } 
+        else if (index === 2) { eqFilter.type = 'peaking'; eqFilter.frequency.setTargetAtTime(2500, now, 0.2); eqFilter.gain.setTargetAtTime(6, now, 0.2); }
+    }
+
+    let drawHeights = []; 
+    function drawSpectrum() {
+        requestAnimationFrame(drawSpectrum);
+        if (!analyser) return;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        
+        const w = spectrumCanvas.clientWidth;
+        const h = spectrumCanvas.clientHeight;
+        spectrumCtx.clearRect(0, 0, w, h);
+        spectrumCtx.fillStyle = '#57e389';
+        
+        const barWidth = 4;
+        const gap = 4; 
+        
+        for (let i = 0; i < dataArray.length; i++) {
+            const targetHeight = (dataArray[i] / 255) * h;
+            if (drawHeights[i] === undefined) drawHeights[i] = 0;
+            drawHeights[i] += (targetHeight - drawHeights[i]) * 0.2; 
+            let barH = Math.floor(drawHeights[i]);
+            for (let j = 0; j < barH; j += 3) {
+                spectrumCtx.fillRect(i * (barWidth + gap), h - j - 2, barWidth, 1);
+            }
+        }
+    }
+
+    function formatTime(sec) {
+        if (!isFinite(sec) || sec < 0) return '00:00';
+        return `${Math.floor(sec / 60).toString().padStart(2, '0')}:${Math.floor(sec % 60).toString().padStart(2, '0')}`;
+    }
+
+    audio.addEventListener('play', () => { if(currentView === 'music' || currentView === 'list') btnCenter.innerHTML = '&#10074;&#10074;'; });
+    audio.addEventListener('pause', () => { if(currentView === 'music' || currentView === 'list') btnCenter.innerHTML = '&#9654;'; });
+    audio.addEventListener('ended', async () => {
+        if (playModeIndex === 2) { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+        if (playModeIndex === 3) { 
+            const audioIndices = playlist.map((item, i) => item.type === 'audio' ? i : -1).filter(i => i !== -1);
+            if (audioIndices.length <= 1) return;
+            let randomIndex;
+            do { randomIndex = audioIndices[Math.floor(Math.random() * audioIndices.length)]; } while (randomIndex === currentAudioIndex);
+            loadTrack(randomIndex); await ensureAudio(); audio.play().catch(() => {}); return;
+        }
+        const nextIdx = findNextAudio(1);
+        if (nextIdx !== -1) {
+            if (playModeIndex === 0 && nextIdx <= currentAudioIndex) { audio.pause(); audio.currentTime = 0; return; }
+            loadTrack(nextIdx); await ensureAudio(); audio.play().catch(() => {});
+        }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+        if (!audio.duration) return;
+        if (aPoint !== null && bPoint !== null && audio.currentTime >= bPoint) audio.currentTime = aPoint;
+        const timeEl = document.getElementById('screenTime');
+        if (timeEl && currentView === 'music') timeEl.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+    });
+    audio.addEventListener('loadedmetadata', () => {
+        const timeEl = document.getElementById('screenTime');
+        if (timeEl && currentView === 'music') timeEl.textContent = `00:00 / ${formatTime(audio.duration)}`;
+    });
+
+    updateView();
+</script>
+</body>
+</html>
